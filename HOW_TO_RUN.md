@@ -6,6 +6,7 @@
 
 - C++17 compatible compiler (GCC, Clang, MSVC, etc.)
 - CMake 3.14 or higher
+- Internet connection (first build will download `spdlog` library)
 
 ### Building the Application
 
