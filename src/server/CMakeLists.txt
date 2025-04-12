@@ -7,3 +7,8 @@ add_executable(music_server
 target_include_directories(music_server PRIVATE 
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
+
+target_link_libraries(music_server PRIVATE
+    common
+)
+
