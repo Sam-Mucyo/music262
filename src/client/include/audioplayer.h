@@ -1,6 +1,11 @@
-#include <string>
+#pragma once
 
-class AudioPlayerImpl;
+#include <AudioToolbox/AudioToolbox.h>
+#include <CoreAudio/CoreAudio.h>
+#include <atomic>
+#include <string>
+#include <vector>
+#include "wavheader.h"
 
 class AudioPlayer {
 public:
@@ -8,6 +13,7 @@ public:
      * @brief Constructs a new AudioPlayer object
      */
     AudioPlayer();
+    ~AudioPlayer();
 
     /**
      * @brief Load a specific song
@@ -21,28 +27,22 @@ public:
      */
     void play();
 
-    /**
-     * @brief Pause playback
-     */
-    void pause();
-
-    /**
-     * @brief Stop playback
-     */
-    void stop();
-
-    /**
-     * @brief Get the current playback position in seconds
-     * @return Current position in seconds
-     */
-    double getPosition() const;
-
-    /**
-     * @brief Check if the player is currently playing
-     * @return true if playing, false otherwise
-     */
-    bool isPlaying() const;
-
 private:
-    std::unique_ptr<AudioPlayerImpl> impl;
+    static OSStatus RenderCallback(void* inRefCon,
+                                   AudioUnitRenderActionFlags* ioActionFlags,
+                                   const AudioTimeStamp* inTimeStamp,
+                                   UInt32 inBusNumber,
+                                   UInt32 inNumberFrames,
+                                   AudioBufferList* ioData);
+
+    bool setupAudioUnit();
+
+    WavHeader header;
+    std::vector<char> audioData;
+
+    std::atomic<bool> playing;
+    std::atomic<unsigned int> currentPosition;
+
+    AudioUnit audioUnit;
+    AudioStreamBasicDescription audioFormat;
 };

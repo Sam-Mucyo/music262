@@ -1,78 +1,159 @@
+#include <fstream>
+#include <iostream>
+#include <cstring>
+#include <thread>
 #include "include/audioplayer.h"
-#import <AVFoundation/AVFoundation.h>
+#define _GLIBCXX_USE_NANOSLEEP
 
-// Wrap Objective-C in extern "C" to prevent C++ name mangling
-extern "C" {
-    typedef struct {
-        AVAudioEngine* engine;
-        AVAudioPlayerNode* player;
-        AVAudioFile* file;
-        AVAudioPCMBuffer* buffer;
-        uint64_t startTime;
-    } AudioPlayerImpl;
-}
+// Constructor
+AudioPlayer::AudioPlayer()
+    : playing(false), currentPosition(0), audioUnit(nullptr) {}
 
-AudioPlayer::AudioPlayer() {
-    impl = new AudioPlayerImpl{
-        .engine = [[AVAudioEngine alloc] init],
-        .player = [[AVAudioPlayerNode alloc] init],
-        .file = nil,
-        .buffer = nil,
-        .startTime = 0
-    };
-    [impl->engine attachNode:impl->player];
-    [impl->engine connect:impl->player to:impl->engine.mainOutputNode format:nil];
-}
-
+// Destructor
 AudioPlayer::~AudioPlayer() {
-    [impl->player stop];
-    [impl->engine stop];
-    delete impl;
+    playing.store(false);
+    if (audioUnit) {
+        AudioOutputUnitStop(audioUnit);
+        AudioUnitUninitialize(audioUnit);
+        AudioComponentInstanceDispose(audioUnit);
+    }
 }
 
 bool AudioPlayer::load(const std::string& filePath) {
-    NSString* nsPath = [NSString stringWithUTF8String:filePath.c_str()];
-    NSURL* url = [NSURL fileURLWithPath:nsPath];
-    NSError* error = nil;
-    
-    impl->file = [[AVAudioFile alloc] initForReading:url error:&error];
-    if (error) {
-        NSLog(@"Failed to load file: %@", error);
+    std::ifstream file(filePath, std::ios::binary);
+    if (!file) {
+        std::cerr << "Could not open WAV file: " << filePath << std::endl;
         return false;
     }
 
-    impl->buffer = [[AVAudioPCMBuffer alloc] 
-        initWithPCMFormat:impl->file.processingFormat
-            frameCapacity:(AVAudioFrameCount)impl->file.length];
-    [impl->file readIntoBuffer:impl->buffer error:&error];
-    
-    return error == nil;
+    // Read header
+    file.read(reinterpret_cast<char*>(&header), sizeof(WavHeader));
+    if (std::strncmp(header.riff, "RIFF", 4) != 0 ||
+        std::strncmp(header.wave, "WAVE", 4) != 0) {
+        std::cerr << "Invalid WAV file format." << std::endl;
+        return false;
+    }
+
+    // Read audio data
+    audioData.clear();
+    file.seekg(sizeof(WavHeader), std::ios::beg);
+    audioData.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+    currentPosition.store(0);
+
+    return setupAudioUnit();
+}
+
+bool AudioPlayer::setupAudioUnit() {
+    AudioComponentDescription desc = {};
+    desc.componentType = kAudioUnitType_Output;
+    desc.componentSubType = kAudioUnitSubType_DefaultOutput;
+    desc.componentManufacturer = kAudioUnitManufacturer_Apple;
+
+    AudioComponent component = AudioComponentFindNext(nullptr, &desc);
+    if (!component) {
+        std::cerr << "Audio component not found." << std::endl;
+        return false;
+    }
+
+    if (AudioComponentInstanceNew(component, &audioUnit) != noErr) {
+        std::cerr << "Failed to create audio unit." << std::endl;
+        return false;
+    }
+
+    // Configure format
+    audioFormat.mSampleRate = header.sampleRate;
+    audioFormat.mFormatID = kAudioFormatLinearPCM;
+    audioFormat.mFormatFlags = kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked;
+    audioFormat.mFramesPerPacket = 1;
+    audioFormat.mChannelsPerFrame = header.numChannels;
+    audioFormat.mBitsPerChannel = 32;
+    audioFormat.mBytesPerFrame = audioFormat.mChannelsPerFrame * sizeof(float);
+    audioFormat.mBytesPerPacket = audioFormat.mBytesPerFrame;
+
+    if (AudioUnitSetProperty(audioUnit, kAudioUnitProperty_StreamFormat,
+                             kAudioUnitScope_Input, 0, &audioFormat,
+                             sizeof(audioFormat)) != noErr) {
+        std::cerr << "Failed to set stream format." << std::endl;
+        return false;
+    }
+
+    AURenderCallbackStruct callbackStruct = {};
+    callbackStruct.inputProc = RenderCallback;
+    callbackStruct.inputProcRefCon = this;
+
+    if (AudioUnitSetProperty(audioUnit, kAudioUnitProperty_SetRenderCallback,
+                             kAudioUnitScope_Input, 0, &callbackStruct,
+                             sizeof(callbackStruct)) != noErr) {
+        std::cerr << "Failed to set render callback." << std::endl;
+        return false;
+    }
+
+    if (AudioUnitInitialize(audioUnit) != noErr) {
+        std::cerr << "Failed to initialize audio unit." << std::endl;
+        return false;
+    }
+
+    return true;
 }
 
 void AudioPlayer::play() {
-    if (!impl->file) return;
-    
-    impl->startTime = mach_absolute_time();
-    [impl->engine startAndReturnError:nil];
-    [impl->player play];
-    [impl->player scheduleBuffer:impl->buffer atTime:nil options:AVAudioPlayerNodeBufferLoops completionHandler:nil];
-}
-void AudioPlayer::pause() {
-    [impl->player pause];
+    if (audioData.empty()) {
+        std::cerr << "No audio data loaded.\n";
+    }
+
+    if (AudioOutputUnitStart(audioUnit) != noErr) {
+        std::cerr << "Failed to start audio unit.\n";
+    }
+
+    std::cout << "Playing audio...\n";
+
+    playing.store(true);
+
+    while (playing.load()) {
+        // Wait for playback to finish
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    std::cout << "Playback finished.\n";
 }
 
-void AudioPlayer::stop() {
-    [impl->player stop];
-    impl->startTime = 0;
-}
+OSStatus AudioPlayer::RenderCallback(void* inRefCon,
+                                     AudioUnitRenderActionFlags*,
+                                     const AudioTimeStamp*,
+                                     UInt32,
+                                     UInt32 inNumberFrames,
+                                     AudioBufferList* ioData) {
+    AudioPlayer* player = static_cast<AudioPlayer*>(inRefCon);
 
-double AudioPlayer::getPosition() const {
-    if (!impl->player.playing) return 0.0;
-    
-    uint64_t now = mach_absolute_time();
-    return static_cast<double>(now - impl->startTime) / 1e9;  // Convert nanoseconds to seconds
-}
+    float* outBuffer = reinterpret_cast<float*>(ioData->mBuffers[0].mData);
+    int channels = player->header.numChannels;
+    int bytesPerSample = player->header.bitsPerSample / 8;
+    int bytesPerFrame = bytesPerSample * channels;
 
-bool AudioPlayer::isPlaying() const {
-    return impl->player.playing;
+    unsigned int position = player->currentPosition.load();
+    unsigned int bytesAvailable = player->audioData.size() - position;
+    unsigned int framesAvailable = bytesAvailable / bytesPerFrame;
+
+    UInt32 framesToRender = std::min(inNumberFrames, framesAvailable);
+
+    for (UInt32 i = 0; i < framesToRender; ++i) {
+        for (int ch = 0; ch < channels; ++ch) {
+            int idx = position + (i * bytesPerFrame) + (ch * bytesPerSample);
+            int16_t sample = *reinterpret_cast<int16_t*>(&player->audioData[idx]);
+            outBuffer[i * channels + ch] = sample / 32768.0f;
+        }
+    }
+
+    // Fill the rest with silence if done
+    for (UInt32 i = framesToRender; i < inNumberFrames; ++i) {
+        for (int ch = 0; ch < channels; ++ch) {
+            outBuffer[i * channels + ch] = 0.0f;
+        }
+    }
+
+    player->currentPosition.fetch_add(framesToRender * bytesPerFrame);
+    if (framesToRender < inNumberFrames) {
+        player->playing.store(false);
+    }
+
+    return noErr;
 }

@@ -17,45 +17,29 @@ void displayHelp() {
 }
 
 int main(int argc, char *argv[]) {
-  // Initialize the logger
-  Logger::init("music_client");
-  std::cout << "Music Client started" << std::endl;
+//   // Initialize the logger
+//   Logger::init("music_client");
+//   std::cout << "Music Client started" << std::endl;
   
-  displayHelp();
+//   displayHelp();
+//   LOG_CRITICAL("TODO: Add handler to the above commands to play music");
+//   // TODO: Add handler for the display commands above
+  
+//   return 0;
+    // Init player
     AudioPlayer player;
-    std::string command;
 
-    while (true) {
-        std::cout << "\nEnter command: ";
-        std::cin >> command;
-
-        if (command == "play") {
-            std::string filePath;
-            std::cout << "Enter file path: ";
-            std::cin >> filePath;
-
-            if (!player.load(filePath)) {
-                std::cerr << "Failed to load audio file.\n";
-                continue;
-            }
-
-            player.play();
-            std::cout << "Playing audio...\n";
-        } else if (command == "pause") {
-            player.pause();
-            std::cout << "Playback paused.\n";
-        } else if (command == "stop") {
-            player.stop();
-            std::cout << "Playback stopped.\n";
-        } else if (command == "position") {
-            std::cout << "Current position: " << player.getPosition() << "s\n";
-        } else if (command == "exit") {
-            std::cout << "Exiting...\n";
-            break;
-        } else {
-            displayHelp();
-        }
+    // Load song from disk
+    // player.loadSong("../../sample_music/daydreamin.wav");
+    player.load("../sample_music/daydreamin.wav");
+    if (!player.load("../sample_music/daydreamin.wav")) {
+        std::cerr << "Failed to load song." << std::endl;
+        return 1;
+    }
+    else {
+        std::cout << "Loaded song successfully." << std::endl;
     }
 
-    return 0;
+    // Play music
+    player.play();
 }
