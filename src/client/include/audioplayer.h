@@ -28,6 +28,26 @@ public:
      */
     void play();
 
+    /**
+     * @brief pause the currently playing song
+     */
+    void pause();
+
+    /**
+     * @brief resume the currently paused song at the last position
+     */
+    void resume();
+
+    /**
+     * @brief stop the currently playing song and reset position
+     */
+    void stop();
+
+    /**
+     * @brief get the current position of the song
+     */
+    unsigned int get_position() const;
+
 private:
     static OSStatus RenderCallback(void* inRefCon,
                                    AudioUnitRenderActionFlags* ioActionFlags,
