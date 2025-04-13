@@ -1,4 +1,5 @@
 #include "include/audioplayer.h"
+#include "../common/include/logger.h"
 #include <iostream>
 
 void displayHelp() {
@@ -16,8 +17,13 @@ void displayHelp() {
 }
 
 int main(int argc, char *argv[]) {
+  // Initialize the logger
+  Logger::init("music_client");
+  std::cout << "Music Client started" << std::endl;
+  
   displayHelp();
-  std::cout << "TODO: Add handler to the above commands to play music"
-            << std::endl;
+  LOG_CRITICAL("TODO: Add handler to the above commands to play music");
   // TODO: Add handler for the display commands above
+  
+  return 0;
 }
