@@ -1,5 +1,7 @@
 #include <string>
 
+class AudioPlayerImpl;
+
 class AudioPlayer {
 public:
     /**
@@ -9,13 +11,38 @@ public:
 
     /**
      * @brief Load a specific song
-     * @param songPath path to the specific song
-     * @return true if request was sent successfully, false otherwise
+     * @param filePath path to the specific song
+     * @return true if the file was loaded successfully, false otherwise
      */
-    bool loadSong(const std::string& songPath);
+    bool load(const std::string& filePath);
 
     /**
-     * @brief play a loaded song
+     * @brief Play a loaded song
      */
     void play();
+
+    /**
+     * @brief Pause playback
+     */
+    void pause();
+
+    /**
+     * @brief Stop playback
+     */
+    void stop();
+
+    /**
+     * @brief Get the current playback position in seconds
+     * @return Current position in seconds
+     */
+    double getPosition() const;
+
+    /**
+     * @brief Check if the player is currently playing
+     * @return true if playing, false otherwise
+     */
+    bool isPlaying() const;
+
+private:
+    std::unique_ptr<AudioPlayerImpl> impl;
 };

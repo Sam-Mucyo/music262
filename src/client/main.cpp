@@ -22,8 +22,40 @@ int main(int argc, char *argv[]) {
   std::cout << "Music Client started" << std::endl;
   
   displayHelp();
-  LOG_CRITICAL("TODO: Add handler to the above commands to play music");
-  // TODO: Add handler for the display commands above
-  
-  return 0;
+    AudioPlayer player;
+    std::string command;
+
+    while (true) {
+        std::cout << "\nEnter command: ";
+        std::cin >> command;
+
+        if (command == "play") {
+            std::string filePath;
+            std::cout << "Enter file path: ";
+            std::cin >> filePath;
+
+            if (!player.load(filePath)) {
+                std::cerr << "Failed to load audio file.\n";
+                continue;
+            }
+
+            player.play();
+            std::cout << "Playing audio...\n";
+        } else if (command == "pause") {
+            player.pause();
+            std::cout << "Playback paused.\n";
+        } else if (command == "stop") {
+            player.stop();
+            std::cout << "Playback stopped.\n";
+        } else if (command == "position") {
+            std::cout << "Current position: " << player.getPosition() << "s\n";
+        } else if (command == "exit") {
+            std::cout << "Exiting...\n";
+            break;
+        } else {
+            displayHelp();
+        }
+    }
+
+    return 0;
 }

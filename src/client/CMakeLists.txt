@@ -12,6 +12,7 @@ add_library(audioplayer
 )
 
 target_include_directories(audioplayer PUBLIC
+target_include_directories(audioplayer PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
