@@ -24,6 +24,11 @@ int main(int argc, char *argv[]) {
   displayHelp();
   LOG_CRITICAL("TODO: Add handler to the above commands to play music");
   // TODO: Add handler for the display commands above
+
+  AudioPlayer player;
+  std::string path = "../sample_music/daydreamin.wav";
+  player.load(path);
+  player.play();
   
   return 0;
 }
