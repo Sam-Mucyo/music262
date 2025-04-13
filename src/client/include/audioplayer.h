@@ -5,6 +5,7 @@
 #include <atomic>
 #include <string>
 #include <vector>
+
 #include "wavheader.h"
 
 class AudioPlayer {
@@ -17,15 +18,35 @@ public:
 
     /**
      * @brief Load a specific song
-     * @param filePath path to the specific song
-     * @return true if the file was loaded successfully, false otherwise
+     * @param songPath path to the specific song
+     * @return true if request was sent successfully, false otherwise
      */
-    bool load(const std::string& filePath);
+    bool load(const std::string& songPath);
 
     /**
-     * @brief Play a loaded song
+     * @brief play a loaded song
      */
     void play();
+
+    /**
+     * @brief pause the currently playing song
+     */
+    void pause();
+
+    /**
+     * @brief resume the currently paused song at the last position
+     */
+    void resume();
+
+    /**
+     * @brief stop the currently playing song and reset position
+     */
+    void stop();
+
+    /**
+     * @brief get the current position of the song
+     */
+    unsigned int get_position() const;
 
 private:
     static OSStatus RenderCallback(void* inRefCon,

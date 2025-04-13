@@ -13,7 +13,7 @@ AudioPlayer::AudioPlayer()
 AudioPlayer::~AudioPlayer() {
     playing.store(false);
     if (audioUnit) {
-        AudioOutputUnitStop(audioUnit);
+        // AudioOutputUnitStop(audioUnit);
         AudioUnitUninitialize(audioUnit);
         AudioComponentInstanceDispose(audioUnit);
     }
@@ -37,7 +37,7 @@ bool AudioPlayer::load(const std::string& filePath) {
     // Read audio data
     audioData.clear();
     file.seekg(sizeof(WavHeader), std::ios::beg);
-    audioData.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+    audioData.assign(std::istreambuf_iterator<char>(file), {});
     currentPosition.store(0);
 
     return setupAudioUnit();
@@ -99,21 +99,58 @@ bool AudioPlayer::setupAudioUnit() {
 void AudioPlayer::play() {
     if (audioData.empty()) {
         std::cerr << "No audio data loaded.\n";
+        return;
     }
 
     if (AudioOutputUnitStart(audioUnit) != noErr) {
         std::cerr << "Failed to start audio unit.\n";
+        return;
     }
-
-    std::cout << "Playing audio...\n";
 
     playing.store(true);
+    AudioOutputUnitStart(audioUnit);
+    return;
 
-    while (playing.load()) {
-        // Wait for playback to finish
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    // while (playing.load()) {
+    //     // Wait for playback to finish
+    //     std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    // }
+    // std::cout << "Playback finished.\n";
+}
+
+void AudioPlayer::pause() {
+    if (playing.load()) {
+        playing.store(false);
+        AudioOutputUnitStop(audioUnit);
+        std::cout << "Paused audio.\n";
+    } else {
+        std::cout << "Audio is already paused.\n";
     }
-    std::cout << "Playback finished.\n";
+}
+
+void AudioPlayer::resume() {
+    if (!playing.load()) {
+        playing.store(true);
+        AudioOutputUnitStart(audioUnit);
+        std::cout << "Resumed audio.\n";
+    } else {
+        std::cout << "Audio is already playing.\n";
+    }
+}
+
+void AudioPlayer::stop() {
+    if (playing.load()) {
+        playing.store(false);
+        currentPosition.store(0);
+        AudioOutputUnitStop(audioUnit);
+        std::cout << "Stopped audio.\n";
+    } else {
+        std::cout << "Audio is already stopped.\n";
+    }
+}
+
+unsigned int AudioPlayer::get_position() const {
+    return currentPosition.load();
 }
 
 OSStatus AudioPlayer::RenderCallback(void* inRefCon,

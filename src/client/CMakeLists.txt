@@ -4,8 +4,8 @@ add_executable(music_client
     audioplayer.cpp
 )
 
-target_include_directories(audioplayer PUBLIC
-target_include_directories(audioplayer PUBLIC
+# Include directories
+target_include_directories(music_client PRIVATE 
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
