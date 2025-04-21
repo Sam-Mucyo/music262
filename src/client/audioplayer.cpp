@@ -110,12 +110,6 @@ void AudioPlayer::play() {
     playing.store(true);
     AudioOutputUnitStart(audioUnit);
     return;
-
-    // while (playing.load()) {
-    //     // Wait for playback to finish
-    //     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    // }
-    // std::cout << "Playback finished.\n";
 }
 
 void AudioPlayer::pause() {
@@ -172,6 +166,7 @@ OSStatus AudioPlayer::RenderCallback(void* inRefCon,
 
     UInt32 framesToRender = std::min(inNumberFrames, framesAvailable);
 
+    // Read audio to buffer
     for (UInt32 i = 0; i < framesToRender; ++i) {
         for (int ch = 0; ch < channels; ++ch) {
             int idx = position + (i * bytesPerFrame) + (ch * bytesPerSample);

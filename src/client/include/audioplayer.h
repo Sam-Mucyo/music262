@@ -1,7 +1,9 @@
 #pragma once
 
-#include <AudioToolbox/AudioToolbox.h>
-#include <CoreAudio/CoreAudio.h>
+#ifdef __APPLE__
+    #include <AudioToolbox/AudioToolbox.h>
+    #include <CoreAudio/CoreAudio.h>
+#endif
 #include <atomic>
 #include <string>
 #include <vector>
