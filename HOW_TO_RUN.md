@@ -1,32 +1,30 @@
 # How to Build and Run the Application
 
-## Build 
+The first version of the application has support for macOS only.
+
+## Build
 
 ### Prerequisites
 
 - C++17 compatible compiler (GCC, Clang, MSVC, etc.)
+- Homebrew (recommended for installing dependencies on macOS)
 - CMake 3.14 or higher
-- Internet connection (first build will download `spdlog` library)
+- Protobuf library
+- spdlog library
+
+### Installing Dependencies (macOS)
+
+You can install the required dependencies using Homebrew:
+
+```bash
+brew install cmake protobuf spdlog
+```
 
 ### Building the Application
 
-1. Create a build directory:
-
+From root directory, run:
 ```bash
-mkdir build
-cd build
-```
-
-2. Configure the project:
-
-```bash
-cmake ..
-```
-
-3. Build the project:
-
-```bash
-cmake --build .
+cmake -B build -S . && cmake --build build
 ```
 
 After successful build, the executables will be in the `build/bin` directory.
