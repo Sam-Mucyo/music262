@@ -3,7 +3,6 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include "client_handler.grpc.pb.h" // Generated Protobuf header
 
 // Forward declarations for Protobuf message types
 class PingRequest;
