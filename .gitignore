@@ -1,5 +1,6 @@
 # CMake files
 build/
+*.log
 
 # IDE files
 .vscode/
