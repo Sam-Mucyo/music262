@@ -13,6 +13,7 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 # Options
 option(BUILD_TESTS "Build test programs" ON)
+option(BUILD_DOCS "Build documentation" ON)
 
 # Add FetchContent for dependency management
 include(FetchContent)
@@ -51,4 +52,30 @@ add_subdirectory(src)
 # Add tests directory if tests are enabled
 if(BUILD_TESTS)
     add_subdirectory(tests)
+endif()
+
+# Add documentation target if docs are enabled
+if(BUILD_DOCS)
+    find_package(Doxygen)
+    if(DOXYGEN_FOUND)
+        message(STATUS "Doxygen found, documentation generation enabled")
+        
+        # Make sure Doxyfile exists
+        if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/docs/Doxyfile)
+            message(WARNING "Doxyfile not found at ${CMAKE_CURRENT_SOURCE_DIR}/docs/Doxyfile")
+            message(STATUS "Run 'doxygen -g docs/Doxyfile' to generate a default configuration")
+        else()
+            # Add a custom target to run Doxygen
+            add_custom_target(docs
+                COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/docs/Doxyfile
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                COMMENT "Generating API documentation with Doxygen"
+                VERBATIM
+            )
+            
+            message(STATUS "Documentation will be generated in ${CMAKE_CURRENT_SOURCE_DIR}/docs/doxygen/html")
+        endif()
+    else()
+        message(WARNING "Doxygen not found, documentation generation disabled")
+    endif()
 endif()
