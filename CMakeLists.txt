@@ -19,6 +19,24 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
+# Options
+option(BUILD_TESTS "Build test programs" ON)
+
+include(FetchContent)
+
+# Fetch GoogleTest for unit testing
+if(BUILD_TESTS)
+    FetchContent_Declare(
+        googletest
+        GIT_REPOSITORY https://github.com/google/googletest.git
+        GIT_TAG v1.14.0
+    )
+
+    FetchContent_MakeAvailable(googletest)
+    enable_testing()
+    include(GoogleTest)
+endif()
+
 # Include directories
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -26,3 +44,8 @@ include_directories(
 
 # Add subdirectories
 add_subdirectory(src)
+
+# Add tests directory if tests are enabled
+if(BUILD_TESTS)
+    add_subdirectory(tests)
+endif()
