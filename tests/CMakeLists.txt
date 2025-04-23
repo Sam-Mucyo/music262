@@ -14,10 +14,11 @@ add_executable(audioplayer_test
     ${CMAKE_SOURCE_DIR}/src/client/audioplayer.cpp
 )
 
-# Link against Google Test and required libraries
+# Link against Google Test, Google Mock, and required libraries
 target_link_libraries(audioplayer_test
     PRIVATE
     gtest
+    gmock
     gtest_main
     spdlog
     "-framework CoreAudio"
