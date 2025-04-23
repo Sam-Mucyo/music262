@@ -14,6 +14,7 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 # Options
 option(BUILD_TESTS "Build test programs" ON)
 option(BUILD_DOCS "Build documentation" ON)
+option(ENABLE_FORMATTING "Enable code formatting" ON)
 
 # Add FetchContent for dependency management
 include(FetchContent)
@@ -77,5 +78,39 @@ if(BUILD_DOCS)
         endif()
     else()
         message(WARNING "Doxygen not found, documentation generation disabled")
+    endif()
+endif()
+
+# Add formatting targets if formatting is enabled
+if(ENABLE_FORMATTING)
+    find_program(CLANG_FORMAT "clang-format")
+    if(CLANG_FORMAT)
+        message(STATUS "clang-format found, formatting enabled")
+        
+        # Format check target - validates that all code is properly formatted
+        add_custom_target(format-check
+            COMMAND ${CMAKE_COMMAND} -E echo "Checking formatting..."
+            COMMAND find ${CMAKE_CURRENT_SOURCE_DIR}/src -name "*.cpp" -o -name "*.h" -o -name "*.hpp" | xargs ${CLANG_FORMAT} --dry-run --Werror
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            COMMENT "Checking code formatting compliance"
+            VERBATIM
+        )
+        
+        # Format target - actually formats all code according to style
+        add_custom_target(format
+            COMMAND ${CMAKE_COMMAND} -E echo "Formatting code..."
+            COMMAND find ${CMAKE_CURRENT_SOURCE_DIR}/src -name "*.cpp" -o -name "*.h" -o -name "*.hpp" | xargs ${CLANG_FORMAT} -i
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            COMMENT "Formatting code according to style guide"
+            VERBATIM
+        )
+        
+        # Add pre-build hook to ensure code is properly formatted
+        add_custom_target(format-all ALL
+            DEPENDS format
+            COMMENT "Ensuring all code is properly formatted"
+        )
+    else()
+        message(WARNING "clang-format not found, formatting disabled")
     endif()
 endif()
