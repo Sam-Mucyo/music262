@@ -23,11 +23,19 @@ cd build
 cmake ..
 ```
 
+You can disable formatting if needed:
+
+```bash
+cmake -DENABLE_FORMATTING=OFF ..
+```
+
 3. Build the project:
 
 ```bash
 cmake --build .
 ```
+
+The build process will automatically format the code according to style guidelines.
 
 After successful build, the executables will be in the `build/bin` directory.
 

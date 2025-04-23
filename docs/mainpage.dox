@@ -1,0 +1,50 @@
+/**
+ * @mainpage Music262 - Music Streaming Application
+ *
+ * @section intro_sec Introduction
+ *
+ * Music262 is a music streaming application with client and server components.
+ * It allows users to stream music files from a central server to their client
+ * applications.
+ *
+ * @section architecture Architecture
+ *
+ * The application is divided into several components:
+ *
+ * - **Client**: Handles user interface and audio playback
+ * - **Server**: Manages music library and streams music to clients
+ * - **Common**: Shared utilities used by both client and server
+ *
+ * @section building Building the Project
+ *
+ * This project uses CMake as its build system. To build the project:
+ *
+ * ```
+ * mkdir -p build && cd build
+ * cmake ..
+ * make
+ * ```
+ *
+ * For detailed build instructions, see the HOW_TO_RUN.md file in the project root.
+ *
+ * @section testing Testing
+ *
+ * The project includes unit tests built with Google Test. To run the tests:
+ *
+ * ```
+ * mkdir -p build && cd build
+ * cmake ..
+ * make
+ * cd bin
+ * ./audioplayer_test
+ * ```
+ *
+ * @section components Main Components
+ *
+ * - AudioPlayer: Handles audio file loading and playback
+ * - Logger: Provides thread-safe logging functionality
+ *
+ * @section license License
+ *
+ * This project is for educational purposes as part of CS262.
+ */
