@@ -27,6 +27,8 @@ From root directory, run:
 cmake -B build -S . && cmake --build build
 ```
 
+The build process will automatically format the code according to style guidelines.
+
 After successful build, the executables will be in the `build/bin` directory.
 
 ## Running the Application
