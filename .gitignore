@@ -1,5 +1,6 @@
 # CMake files
 build/
+*.log
 
 # IDE files
 .vscode/
@@ -11,3 +12,6 @@ build/
 .DS_Store
 .DS_Store?
 ._*
+
+# Doxygen generated documentation
+docs/doxygen/
