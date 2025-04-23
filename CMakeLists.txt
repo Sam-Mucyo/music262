@@ -9,7 +9,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Required packages
 find_package(Protobuf REQUIRED)
 find_package(spdlog REQUIRED)
-find_package(Gtest REQUIRED)
+find_package(GTest REQUIRED)
 
 # Add homebrew paths for macOS (needed for finding gRPC and other libs)
 include_directories(/opt/homebrew/include)
