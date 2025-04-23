@@ -1,6 +1,7 @@
 # Client executable
 add_executable(music_client
     main.cpp
+    audioplayer.cpp
 )
 
 # Include directories
@@ -11,4 +12,7 @@ target_include_directories(music_client PRIVATE
 # Link libraries
 target_link_libraries(music_client PRIVATE
     common
+    "-framework CoreAudio"
+    "-framework AudioToolbox"
 )
+
