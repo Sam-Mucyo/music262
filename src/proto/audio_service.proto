@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package audio_service;
+
+service audio_service {
+  rpc GetPlaylist(PlaylistRequest) returns(PlaylistResponse);
+  rpc LoadAudio(LoadAudioRequest) returns(stream AudioChunk);
+  rpc GetPeerClientIPs(PeerListRequest) returns(PeerListResponse);
+}
+
+message PlaylistRequest {
+  // since we plan to get all available songs
+}
+
+message PlaylistResponse { repeated string song_names = 1; }
+
+message LoadAudioRequest { string song_name = 1; }
+
+message AudioChunk { bytes data = 1; }
+
+message PeerListRequest {
+  // also gets a liest of clients' IP address current connected to server
+}
+
+message PeerListResponse { repeated string client_ips = 1; }
