@@ -4,15 +4,16 @@
 /**
  * @file wavheader.h
  * @brief Defines the WAV file header structure
- * 
+ *
  * This file contains the definition of the WavHeader structure that represents
- * the header of a standard WAV audio file. It follows the RIFF format specification.
+ * the header of a standard WAV audio file. It follows the RIFF format
+ * specification.
  */
 
 /**
  * @struct WavHeader
  * @brief Structure representing a standard WAV file header
- * 
+ *
  * This structure exactly matches the binary format of a WAV file header,
  * making it possible to read WAV files directly into this structure.
  */
@@ -25,11 +26,12 @@ struct WavHeader {
   unsigned short audioFormat; /**< Audio format (1 for PCM) */
   unsigned short numChannels; /**< Number of channels */
   unsigned int sampleRate;    /**< Sample rate in Hz */
-  unsigned int byteRate;      /**< Byte rate (SampleRate * NumChannels * BitsPerSample/8) */
-  unsigned short blockAlign;  /**< Block align (NumChannels * BitsPerSample/8) */
+  unsigned int
+      byteRate; /**< Byte rate (SampleRate * NumChannels * BitsPerSample/8) */
+  unsigned short blockAlign; /**< Block align (NumChannels * BitsPerSample/8) */
   unsigned short bitsPerSample; /**< Bits per sample */
-  char data[4];               /**< "data" chunk descriptor */
-  unsigned int dataSize;      /**< Size of data chunk in bytes */
+  char data[4];                 /**< "data" chunk descriptor */
+  unsigned int dataSize;        /**< Size of data chunk in bytes */
 };
 
-#endif // WAV_HEADER_H
+#endif  // WAV_HEADER_H
