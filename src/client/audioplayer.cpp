@@ -44,6 +44,30 @@ bool AudioPlayer::load(const std::string& filePath) {
   return setupAudioUnit();
 }
 
+bool AudioPlayer::loadFromMemory(const char* data, size_t size) {
+  if (size < sizeof(WavHeader)) {
+    std::cerr << "Data too small to be a valid WAV file." << std::endl;
+    return false;
+  }
+
+  // Copy the header from the memory buffer
+  std::memcpy(&header, data, sizeof(WavHeader));
+
+  // Validate WAV header
+  if (std::strncmp(header.riff, "RIFF", 4) != 0 ||
+      std::strncmp(header.wave, "WAVE", 4) != 0) {
+    std::cerr << "Invalid WAV file format in memory buffer." << std::endl;
+    return false;
+  }
+
+  // Copy the audio data
+  audioData.clear();
+  audioData.assign(data + sizeof(WavHeader), data + size);
+  currentPosition.store(0);
+
+  return setupAudioUnit();
+}
+
 bool AudioPlayer::setupAudioUnit() {
   AudioComponentDescription desc = {};
   desc.componentType = kAudioUnitType_Output;

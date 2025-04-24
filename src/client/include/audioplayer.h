@@ -19,11 +19,19 @@ class AudioPlayer {
   ~AudioPlayer();
 
   /**
-   * @brief Load a specific song
+   * @brief Load a specific song from file
    * @param songPath path to the specific song
    * @return true if request was sent successfully, false otherwise
    */
   bool load(const std::string& songPath);
+
+  /**
+   * @brief Load a specific song from memory
+   * @param data pointer to the audio data in memory
+   * @param size size of the audio data in bytes
+   * @return true if loaded successfully, false otherwise
+   */
+  bool loadFromMemory(const char* data, size_t size);
 
   /**
    * @brief play a loaded song
