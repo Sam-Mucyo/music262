@@ -1,6 +1,7 @@
-#include "include/audioplayer.h"
-#include "../common/include/logger.h"
 #include <iostream>
+
+#include "../common/include/logger.h"
+#include "include/audioplayer.h"
 
 void displayHelp() {
   std::cout << "\nCommands:" << std::endl;
@@ -20,7 +21,7 @@ int main(int argc, char *argv[]) {
   // Initialize the logger
   Logger::init("music_client");
   std::cout << "Music Client started" << std::endl;
-  
+
   displayHelp();
   LOG_CRITICAL("TODO: Add handler to the above commands to play music");
   // TODO: Add handler for the display commands above
@@ -28,45 +29,37 @@ int main(int argc, char *argv[]) {
   // Init player
   AudioPlayer player;
   std::string command;
-  
+
   while (true) {
     std::cout << "\nEnter command: ";
     std::cin >> command;
 
     if (command == "play") {
-        std::string filePath;
-        std::cout << "Enter the absolute path to the WAV file: ";
-        std::cin >> filePath;
+      std::string filePath;
+      std::cout << "Enter the absolute path to the WAV file: ";
+      std::cin >> filePath;
 
-        player.load(filePath);
-        player.play();
-    }
-    else if (command == "pause") {
-        player.pause();
-    }
-    else if (command == "resume") {
-        player.resume();
-    }
-    else if (command == "stop") {
-        player.stop();
-    }
-    else if (command == "resume") {
-        player.play();
-    }
-    else if (command == "position") {
-        std::cout << "Current position: " << player.get_position() << std::endl;
-    }
-    else if (command == "duration") {
-        std::cout << "Duration: " << player.get_position() << std::endl;
-    }
-    else if (command == "help") {
-        displayHelp();
-    }
-    else if (command == "exit") {
-        break;
-    }
-    else {
-        std::cout << "Unknown command. Type 'help' for a list of commands." << std::endl;
+      player.load(filePath);
+      player.play();
+    } else if (command == "pause") {
+      player.pause();
+    } else if (command == "resume") {
+      player.resume();
+    } else if (command == "stop") {
+      player.stop();
+    } else if (command == "resume") {
+      player.play();
+    } else if (command == "position") {
+      std::cout << "Current position: " << player.get_position() << std::endl;
+    } else if (command == "duration") {
+      std::cout << "Duration: " << player.get_position() << std::endl;
+    } else if (command == "help") {
+      displayHelp();
+    } else if (command == "exit") {
+      break;
+    } else {
+      std::cout << "Unknown command. Type 'help' for a list of commands."
+                << std::endl;
     }
   }
   return 0;

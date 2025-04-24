@@ -1,10 +1,11 @@
 #pragma once
 
-#include <iostream>
-#include <memory>
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
+
+#include <iostream>
+#include <memory>
 #include <string>
 
 /**
@@ -17,7 +18,7 @@
  * formatting.
  */
 class Logger {
-public:
+ public:
   /**
    * @brief Initialize the logger with default settings
    *
