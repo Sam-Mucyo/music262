@@ -1,7 +1,5 @@
 #include "include/client.h"
 
-#include <filesystem>
-#include <fstream>
 #include <iostream>
 
 using audio_service::AudioChunk;

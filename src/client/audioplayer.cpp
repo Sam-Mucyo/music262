@@ -3,7 +3,6 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
-#include <thread>
 #define _GLIBCXX_USE_NANOSLEEP
 
 // Constructor

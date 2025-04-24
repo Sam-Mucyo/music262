@@ -32,6 +32,14 @@ The build process will automatically format the code according to style guidelin
 
 After successful build, the executables will be in the `build/bin` directory.
 
+### Developer setup (optional)
+
+If you use clangd/VS Code/Neovim for C++ language features and hate those red-underlines, give your editor the exact compile flags:
+```bash
+cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+ln -sf build/compile_commands.json .   # makes clangd pick it up from the repo root
+
+
 ## Running the Application
 
 ### Server
