@@ -1,6 +1,10 @@
+#include <arpa/inet.h>
 #include <grpcpp/ext/proto_server_reflection_plugin.h>
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/health_check_service_interface.h>
+#include <ifaddrs.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 
 #include <filesystem>
 #include <fstream>
@@ -33,6 +37,25 @@ std::vector<std::string> get_audio_files(const std::string& directory) {
   }
 
   return audio_files;
+}
+
+// Helper: get first non-loopback IPv4 address
+std::string GetLocalIPAddress() {
+  struct ifaddrs* ifas = nullptr;
+  if (getifaddrs(&ifas) == -1) return "";
+  for (auto* ifa = ifas; ifa; ifa = ifa->ifa_next) {
+    if (!ifa->ifa_addr || ifa->ifa_addr->sa_family != AF_INET) continue;
+    std::string name(ifa->ifa_name);
+    if (name == "lo0") continue;
+    auto* addr = (struct sockaddr_in*)ifa->ifa_addr;
+    char buf[INET_ADDRSTRLEN];
+    if (inet_ntop(AF_INET, &addr->sin_addr, buf, sizeof(buf))) {
+      freeifaddrs(ifas);
+      return std::string(buf);
+    }
+  }
+  freeifaddrs(ifas);
+  return "";
 }
 
 // AudioServiceImpl class that implements the gRPC service
@@ -226,6 +249,11 @@ int main(int argc, char* argv[]) {
   std::cout << "Music Streaming Server - Starting up..." << std::endl;
   std::cout << "Configured to use port: " << port << std::endl;
   std::cout << "Audio directory: " << audio_directory << std::endl;
+
+  // Determine and log actual network IP and port
+  std::string local_ip = GetLocalIPAddress();
+  if (local_ip.empty()) local_ip = "127.0.0.1";
+  std::cout << "Server listening on " << local_ip << ":" << port << std::endl;
 
   std::cout << "Welcome to the Music262 Server!" << std::endl;
   std::cout << "Type 'help' to see available commands." << std::endl;

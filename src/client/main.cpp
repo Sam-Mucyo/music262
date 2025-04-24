@@ -1,5 +1,6 @@
 #include <grpcpp/grpcpp.h>
 
+#include <cstdlib>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -19,7 +20,8 @@ void PrintUsage() {
 
 int main(int argc, char** argv) {
   // Default values
-  std::string server_address = "localhost:50051";
+  const char* env_addr = std::getenv("MUSIC262_SERVER_ADDRESS");
+  std::string server_address = env_addr ? env_addr : "localhost:50051";
 
   // Parse command line arguments
   for (int i = 1; i < argc; i++) {
