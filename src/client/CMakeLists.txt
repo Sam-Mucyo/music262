@@ -1,12 +1,13 @@
 # Client executable
-add_executable(music_client
+add_executable(music_client 
     main.cpp
     client.cpp
     audioplayer.cpp
+    client.cpp
 )
 
 # Include directories
-target_include_directories(music_client PRIVATE 
+target_include_directories(music_client PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_BINARY_DIR}
     ${CMAKE_BINARY_DIR}/src/proto
@@ -19,4 +20,3 @@ target_link_libraries(music_client PRIVATE
     "-framework CoreAudio"
     "-framework AudioToolbox"
 )
-

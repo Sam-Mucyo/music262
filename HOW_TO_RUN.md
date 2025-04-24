@@ -7,6 +7,7 @@ This updated version of the application has support for macOS only, with streami
 ### Prerequisites
 
 - C++17 compatible compiler (GCC, Clang, MSVC, etc.)
+- Homebrew (recommended for installing dependencies on macOS)
 - CMake 3.14 or higher
 - Protobuf library
 - gRPC library
@@ -22,29 +23,9 @@ brew install cmake protobuf grpc spdlog
 
 ### Building the Application
 
-1. Create a build directory:
-
+From root directory, run:
 ```bash
-mkdir build
-cd build
-```
-
-2. Configure the project:
-
-```bash
-cmake ..
-```
-
-You can disable formatting if needed:
-
-```bash
-cmake -DENABLE_FORMATTING=OFF ..
-```
-
-3. Build the project:
-
-```bash
-cmake --build .
+cmake -B build -S . && cmake --build build
 ```
 
 The build process will automatically format the code according to style guidelines.

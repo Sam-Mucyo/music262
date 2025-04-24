@@ -17,9 +17,8 @@ add_executable(audioplayer_test
 # Link against Google Test and required libraries
 target_link_libraries(audioplayer_test
     PRIVATE
-    gtest
-    gtest_main
-    spdlog
+    GTest::gtest_main
+    spdlog::spdlog
     "-framework CoreAudio"
     "-framework AudioToolbox"
 )
