@@ -1,0 +1,49 @@
+#pragma once
+
+#include <grpcpp/grpcpp.h>
+
+#include <memory>
+#include <string>
+#include <vector>
+
+#include "audio_service.grpc.pb.h"
+#include "audioplayer.h"
+
+using grpc::Channel;
+using grpc::ClientContext;
+using grpc::ClientReader;
+using grpc::Status;
+
+class AudioClient {
+ public:
+  AudioClient(std::shared_ptr<Channel> channel);
+
+  // Request the playlist from the server
+  std::vector<std::string> GetPlaylist();
+
+  // Load audio data for a specific song
+  bool LoadAudio(const std::string& song_name);
+
+  // Play the currently loaded audio
+  void Play();
+
+  // Pause the currently playing audio
+  void Pause();
+
+  // Resume the paused audio
+  void Resume();
+
+  // Stop the currently playing audio
+  void Stop();
+
+  // Get the current playback position
+  unsigned int GetPosition() const;
+
+  // Get the list of connected client IPs
+  std::vector<std::string> GetPeerClientIPs();
+
+ private:
+  std::unique_ptr<audio_service::audio_service::Stub> stub_;
+  AudioPlayer player_;
+  std::vector<char> audio_data_;
+};
