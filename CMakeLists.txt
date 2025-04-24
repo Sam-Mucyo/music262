@@ -7,9 +7,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Required packages
-find_package(Protobuf REQUIRED)
 find_package(spdlog REQUIRED)
 find_package(GTest REQUIRED)
+
+# Find Protobuf and gRPC
+set(protobuf_MODULE_COMPATIBLE TRUE)
+find_package(Protobuf CONFIG REQUIRED)
+set(_PROTOBUF_LIBPROTOBUF protobuf::libprotobuf)
+find_package(gRPC CONFIG REQUIRED)
 
 # Add homebrew paths for macOS (needed for finding gRPC and other libs)
 include_directories(/opt/homebrew/include)
