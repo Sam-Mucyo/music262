@@ -2,6 +2,7 @@
 
 #include <grpcpp/grpcpp.h>
 
+#include <atomic>
 #include <memory>
 #include <string>
 #include <vector>
@@ -14,9 +15,13 @@ using grpc::ClientContext;
 using grpc::ClientReader;
 using grpc::Status;
 
+// Forward declaration
+class PeerNetwork;
+
 class AudioClient {
  public:
   AudioClient(std::shared_ptr<Channel> channel);
+  ~AudioClient();
 
   // Request the playlist from the server
   std::vector<std::string> GetPlaylist();
@@ -42,8 +47,27 @@ class AudioClient {
   // Get the list of connected client IPs
   std::vector<std::string> GetPeerClientIPs();
 
+  // Get reference to audio player (for peer service)
+  AudioPlayer& GetPlayer() { return player_; }
+
+  // Control whether commands should be broadcast to peers
+  void EnablePeerSync(bool enable);
+  bool IsPeerSyncEnabled() const { return peer_sync_enabled_; }
+
+  // Set the peer network for command broadcasting
+  void SetPeerNetwork(std::shared_ptr<PeerNetwork> peer_network);
+
+  // Flag to prevent broadcast loops
+  void SetCommandFromBroadcast(bool value) { command_from_broadcast_ = value; }
+  bool IsCommandFromBroadcast() const { return command_from_broadcast_; }
+
  private:
   std::unique_ptr<audio_service::audio_service::Stub> stub_;
   AudioPlayer player_;
   std::vector<char> audio_data_;
+
+  // Peer synchronization
+  std::shared_ptr<PeerNetwork> peer_network_;
+  std::atomic<bool> peer_sync_enabled_{false};
+  std::atomic<bool> command_from_broadcast_{false};
 };
