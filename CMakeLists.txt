@@ -6,6 +6,20 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Required packages
+find_package(spdlog REQUIRED)
+find_package(GTest REQUIRED)
+
+# Find Protobuf and gRPC
+set(protobuf_MODULE_COMPATIBLE TRUE)
+find_package(Protobuf CONFIG REQUIRED)
+set(_PROTOBUF_LIBPROTOBUF protobuf::libprotobuf)
+find_package(gRPC CONFIG REQUIRED)
+
+# Add homebrew paths for macOS (needed for finding gRPC and other libs)
+include_directories(/opt/homebrew/include)
+link_directories(/opt/homebrew/lib)
+
 # Set output directories
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -15,32 +29,6 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 option(BUILD_TESTS "Build test programs" ON)
 option(BUILD_DOCS "Build documentation" ON)
 option(ENABLE_FORMATTING "Enable code formatting" ON)
-
-# Add FetchContent for dependency management
-include(FetchContent)
-
-# Fetch spdlog for logging
-FetchContent_Declare(
-    spdlog
-    GIT_REPOSITORY https://github.com/gabime/spdlog.git
-    GIT_TAG v1.12.0
-)
-
-# Fetch GoogleTest for unit testing
-if(BUILD_TESTS)
-    FetchContent_Declare(
-        googletest
-        GIT_REPOSITORY https://github.com/google/googletest.git
-        GIT_TAG v1.14.0
-    )
-    # For Windows: Prevent overriding the parent project's compiler/linker settings
-    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-    FetchContent_MakeAvailable(googletest)
-    enable_testing()
-    include(GoogleTest)
-endif()
-
-FetchContent_MakeAvailable(spdlog)
 
 # Include directories
 include_directories(
