@@ -6,7 +6,6 @@ This directory contains unit tests for the AudioPlayer class. The tests use Goog
 
 - `audioplayer_mock_test.cpp`: Tests using mock AudioAPI and FileSystem classes
 - `audioplayer_coreaudio_test.cpp`: Tests using mocked CoreAudio APIs
-- `audioplayer_real_file_test.cpp`: Tests using the actual daydreamin.wav file
 - `audioplayer_callback_test.cpp`: Tests simulating the RenderCallback function
 
 ## Building and Running Tests
@@ -38,7 +37,7 @@ Or run individual test executables:
    ```
    ./audioplayer_mock_test
    ./audioplayer_coreaudio_test
-   ./audioplayer_real_file_test
+   ./_file_test
    ./audioplayer_callback_test
    ```
 

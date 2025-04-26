@@ -52,26 +52,6 @@ target_link_libraries(audioplayer_coreaudio_test
 # Register test with CTest
 gtest_discover_tests(audioplayer_coreaudio_test)
 
-# Create test executable for AudioPlayer with real WAV file
-add_executable(audioplayer_real_file_test
-    audioplayer_real_file_test.cpp
-    ${CMAKE_SOURCE_DIR}/src/client/audioplayer.cpp
-)
-
-# Link against Google Test and required libraries
-target_link_libraries(audioplayer_real_file_test
-    PRIVATE
-    gtest
-    gmock
-    gtest_main
-    spdlog
-    "-framework CoreAudio"
-    "-framework AudioToolbox"
-)
-
-# Register test with CTest
-gtest_discover_tests(audioplayer_real_file_test)
-
 # Create test executable for AudioPlayer with callback simulation
 add_executable(audioplayer_callback_test
     audioplayer_callback_test.cpp

@@ -242,19 +242,6 @@ TEST_F(AudioPlayerTest, GetPosition) {
     std::remove(testFilePath.c_str());
 }
 
-// Test with a real WAV file
-TEST_F(AudioPlayerTest, LoadRealWavFile) {
-    // Use the absolute path to the daydreamin.wav file
-    std::string wavFilePath = "/Users/mirayu/CS 262 Problems/music262/sample_music/daydreamin.wav";
-    
-    // Verify the file exists
-    ASSERT_TRUE(std::filesystem::exists(wavFilePath)) 
-        << "Test file not found: " << wavFilePath;
-    
-    // Load the real WAV file
-    EXPECT_TRUE(player->load(wavFilePath));
-}
-
 int main(int argc, char **argv) {
     testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

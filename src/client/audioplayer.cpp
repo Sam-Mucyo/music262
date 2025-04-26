@@ -33,7 +33,7 @@ bool AudioPlayer::load(const std::string& filePath) {
         return false;
     }
 
-  // Read header
+  // Read header (checked tests)
   file.read(reinterpret_cast<char*>(&header), sizeof(WavHeader));
   if (std::strncmp(header.riff, "RIFF", 4) != 0 ||
       std::strncmp(header.wave, "WAVE", 4) != 0) {
@@ -88,6 +88,7 @@ bool AudioPlayer::setupAudioUnit() {
   callbackStruct.inputProc = RenderCallback;
   callbackStruct.inputProcRefCon = this;
 
+  // checked tests
   if (AudioUnitSetProperty(audioUnit, kAudioUnitProperty_SetRenderCallback,
                            kAudioUnitScope_Input, 0, &callbackStruct,
                            sizeof(callbackStruct)) != noErr) {
@@ -109,6 +110,7 @@ void AudioPlayer::play() {
     return;
   }
 
+  // Checked
   if (AudioOutputUnitStart(audioUnit) != noErr) {
     std::cerr << "Failed to start audio unit.\n";
     return;
