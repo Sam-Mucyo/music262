@@ -142,7 +142,7 @@ void AudioPlayer::resume() {
 void AudioPlayer::stop() {
   if (playing.load()) {
     playing.store(false);
-    currentPosition.store(0);
+    currentPosition.store(sizeof(WavHeader));
     AudioOutputUnitStop(audioUnit);
     std::cout << "Stopped audio.\n";
   } else {
