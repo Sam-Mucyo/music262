@@ -5,7 +5,6 @@
 #include <cstring>
 #include <fstream>
 #include <vector>
-#include <filesystem>
 
 // Mock CoreAudio APIs
 extern "C" {
@@ -66,21 +65,6 @@ extern "C" {
 #define AudioUnitUninitialize MockAudioUnitUninitialize
 #define AudioComponentInstanceDispose MockAudioComponentInstanceDispose
 
-// Mock class for AudioEngine
-class MockAudioEngine {
-public:
-    MOCK_METHOD(bool, initialize, (), ());
-    MOCK_METHOD(void, shutdown, (), ());
-    MOCK_METHOD(bool, loadAudioFile, (const std::string&), ());
-    MOCK_METHOD(void, play, (), ());
-    MOCK_METHOD(void, pause, (), ());
-    MOCK_METHOD(void, stop, (), ());
-    MOCK_METHOD(bool, isPlaying, (), (const));
-    MOCK_METHOD(float, getVolume, (), (const));
-    MOCK_METHOD(void, setVolume, (float), ());
-};
-
-// Test fixture for AudioPlayer tests
 class AudioPlayerTest : public ::testing::Test {
 protected:
     void SetUp() override {
@@ -240,19 +224,6 @@ TEST_F(AudioPlayerTest, GetPosition) {
     
     // Clean up
     std::remove(testFilePath.c_str());
-}
-
-// Test with a real WAV file
-TEST_F(AudioPlayerTest, LoadRealWavFile) {
-    // Use the absolute path to the daydreamin.wav file
-    std::string wavFilePath = "/Users/mirayu/CS 262 Problems/music262/sample_music/daydreamin.wav";
-    
-    // Verify the file exists
-    ASSERT_TRUE(std::filesystem::exists(wavFilePath)) 
-        << "Test file not found: " << wavFilePath;
-    
-    // Load the real WAV file
-    EXPECT_TRUE(player->load(wavFilePath));
 }
 
 int main(int argc, char **argv) {
