@@ -20,7 +20,7 @@ jobs:
       - name: Install dependencies
         run: |
           brew update
-          brew install cmake
+          brew install cmake spdlog googletest protobuf grpc
 
       - name: Create build directory
         run: mkdir -p build
