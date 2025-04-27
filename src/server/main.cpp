@@ -88,7 +88,8 @@ class AudioServiceImpl final : public audio_service::audio_service::Service {
     int song_num = request->song_num();
     LOG_INFO("Received request to load song: {}", song_num);
 
-    std::string song_name = playlist_[song_num];
+    std::string song_name = playlist_[song_num - 1];
+    LOG_INFO("SONG NAME: {}", song_name);
 
     // Check if the requested song exists
     std::string file_path = audio_directory_ + "/" + song_name;
