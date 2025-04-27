@@ -42,11 +42,11 @@ std::vector<std::string> AudioClient::GetPlaylist() {
   return playlist;
 }
 
-bool AudioClient::LoadAudio(const std::string& song_name) {
-  LOG_INFO("Loading audio for song: {}", song_name);
+bool AudioClient::LoadAudio(int song_num) {
+  LOG_INFO("Loading audio for song: {}", song_num);
 
   LoadAudioRequest request;
-  request.set_song_name(song_name);
+  request.set_song_num(song_num);
 
   ClientContext context;
   std::unique_ptr<ClientReader<AudioChunk>> reader(
@@ -68,7 +68,7 @@ bool AudioClient::LoadAudio(const std::string& song_name) {
 
   Status status = reader->Finish();
   if (status.ok()) {
-    LOG_INFO("Successfully received {} bytes for {}", total_bytes, song_name);
+    LOG_INFO("Successfully received {} bytes for {}", total_bytes, song_num);
 
     // Load audio data into player from memory
     if (!player_.loadFromMemory(audio_data_.data(), audio_data_.size())) {

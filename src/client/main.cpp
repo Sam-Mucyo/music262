@@ -13,7 +13,7 @@
 void PrintUsage() {
   std::cout << "Usage: \n"
             << "  playlist - Get list of available songs\n"
-            << "  play <song_name> - Load and play a song\n"
+            << "  play <song_num> - Load and play a song\n"
             << "  pause - Pause the currently playing song\n"
             << "  resume - Resume the currently paused song\n"
             << "  stop - Stop the currently playing song\n"
@@ -89,11 +89,11 @@ int main(int argc, char** argv) {
         }
       }
     } else if (command.substr(0, 5) == "play ") {
-      std::string song_name = command.substr(5);
+      int song_num = std::stoi(command.substr(5));
 
-      std::cout << "Loading " << song_name << "..." << std::endl;
-      if (client.LoadAudio(song_name)) {
-        std::cout << "Playing " << song_name << "..." << std::endl;
+      std::cout << "Loading " << song_num << "..." << std::endl;
+      if (client.LoadAudio(song_num)) {
+        std::cout << "Playing " << song_num << "..." << std::endl;
         client.Play();
       }
     } else if (command == "pause") {

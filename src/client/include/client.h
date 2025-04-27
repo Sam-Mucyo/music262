@@ -27,7 +27,7 @@ class AudioClient {
   std::vector<std::string> GetPlaylist();
 
   // Load audio data for a specific song
-  bool LoadAudio(const std::string& song_name);
+  bool LoadAudio(int song_num);
 
   // Play the currently loaded audio
   void Play();
