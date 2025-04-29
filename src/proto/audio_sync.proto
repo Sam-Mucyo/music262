@@ -2,6 +2,12 @@ syntax = "proto3";
 
 package client;
 
+// Messages for peer2peer handshake
+message JoinRequest {}
+message JoinResponse {
+  repeated string peer_list = 1; // list of known peer addresses
+}
+
 // Messages for ping
 message PingRequest {}
 message PingResponse {}
@@ -23,6 +29,7 @@ message GetPositionResponse {
 
 // Define the service
 service ClientHandler {
+  rpc Join(JoinRequest) returns (JoinResponse);
   rpc Ping(PingRequest) returns (PingResponse);
   rpc SendMusicCommand(MusicRequest) returns (MusicResponse);
   rpc GetPosition(GetPositionRequest) returns (GetPositionResponse);

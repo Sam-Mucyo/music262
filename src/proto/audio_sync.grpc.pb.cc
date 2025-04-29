@@ -22,6 +22,7 @@
 namespace client {
 
 static const char* ClientHandler_method_names[] = {
+  "/client.ClientHandler/Join",
   "/client.ClientHandler/Ping",
   "/client.ClientHandler/SendMusicCommand",
   "/client.ClientHandler/GetPosition",
@@ -34,10 +35,34 @@ std::unique_ptr< ClientHandler::Stub> ClientHandler::NewStub(const std::shared_p
 }
 
 ClientHandler::Stub::Stub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options)
-  : channel_(channel), rpcmethod_Ping_(ClientHandler_method_names[0], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
-  , rpcmethod_SendMusicCommand_(ClientHandler_method_names[1], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
-  , rpcmethod_GetPosition_(ClientHandler_method_names[2], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  : channel_(channel), rpcmethod_Join_(ClientHandler_method_names[0], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_Ping_(ClientHandler_method_names[1], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_SendMusicCommand_(ClientHandler_method_names[2], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_GetPosition_(ClientHandler_method_names[3], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   {}
+
+::grpc::Status ClientHandler::Stub::Join(::grpc::ClientContext* context, const ::client::JoinRequest& request, ::client::JoinResponse* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::client::JoinRequest, ::client::JoinResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_Join_, context, request, response);
+}
+
+void ClientHandler::Stub::async::Join(::grpc::ClientContext* context, const ::client::JoinRequest* request, ::client::JoinResponse* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::client::JoinRequest, ::client::JoinResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_Join_, context, request, response, std::move(f));
+}
+
+void ClientHandler::Stub::async::Join(::grpc::ClientContext* context, const ::client::JoinRequest* request, ::client::JoinResponse* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_Join_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::client::JoinResponse>* ClientHandler::Stub::PrepareAsyncJoinRaw(::grpc::ClientContext* context, const ::client::JoinRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::client::JoinResponse, ::client::JoinRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_Join_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::client::JoinResponse>* ClientHandler::Stub::AsyncJoinRaw(::grpc::ClientContext* context, const ::client::JoinRequest& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncJoinRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
 
 ::grpc::Status ClientHandler::Stub::Ping(::grpc::ClientContext* context, const ::client::PingRequest& request, ::client::PingResponse* response) {
   return ::grpc::internal::BlockingUnaryCall< ::client::PingRequest, ::client::PingResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_Ping_, context, request, response);
@@ -112,6 +137,16 @@ ClientHandler::Service::Service() {
   AddMethod(new ::grpc::internal::RpcServiceMethod(
       ClientHandler_method_names[0],
       ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< ClientHandler::Service, ::client::JoinRequest, ::client::JoinResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](ClientHandler::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::client::JoinRequest* req,
+             ::client::JoinResponse* resp) {
+               return service->Join(ctx, req, resp);
+             }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      ClientHandler_method_names[1],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
       new ::grpc::internal::RpcMethodHandler< ClientHandler::Service, ::client::PingRequest, ::client::PingResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
           [](ClientHandler::Service* service,
              ::grpc::ServerContext* ctx,
@@ -120,7 +155,7 @@ ClientHandler::Service::Service() {
                return service->Ping(ctx, req, resp);
              }, this)));
   AddMethod(new ::grpc::internal::RpcServiceMethod(
-      ClientHandler_method_names[1],
+      ClientHandler_method_names[2],
       ::grpc::internal::RpcMethod::NORMAL_RPC,
       new ::grpc::internal::RpcMethodHandler< ClientHandler::Service, ::client::MusicRequest, ::client::MusicResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
           [](ClientHandler::Service* service,
@@ -130,7 +165,7 @@ ClientHandler::Service::Service() {
                return service->SendMusicCommand(ctx, req, resp);
              }, this)));
   AddMethod(new ::grpc::internal::RpcServiceMethod(
-      ClientHandler_method_names[2],
+      ClientHandler_method_names[3],
       ::grpc::internal::RpcMethod::NORMAL_RPC,
       new ::grpc::internal::RpcMethodHandler< ClientHandler::Service, ::client::GetPositionRequest, ::client::GetPositionResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
           [](ClientHandler::Service* service,
@@ -142,6 +177,13 @@ ClientHandler::Service::Service() {
 }
 
 ClientHandler::Service::~Service() {
+}
+
+::grpc::Status ClientHandler::Service::Join(::grpc::ServerContext* context, const ::client::JoinRequest* request, ::client::JoinResponse* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
 }
 
 ::grpc::Status ClientHandler::Service::Ping(::grpc::ServerContext* context, const ::client::PingRequest* request, ::client::PingResponse* response) {

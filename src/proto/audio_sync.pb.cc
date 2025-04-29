@@ -109,6 +109,49 @@ struct MusicRequestDefaultTypeInternal {
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 MusicRequestDefaultTypeInternal _MusicRequest_default_instance_;
 
+inline constexpr JoinResponse::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : peer_list_{},
+        _cached_size_{0} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR JoinResponse::JoinResponse(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct JoinResponseDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR JoinResponseDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~JoinResponseDefaultTypeInternal() {}
+  union {
+    JoinResponse _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 JoinResponseDefaultTypeInternal _JoinResponse_default_instance_;
+              template <typename>
+PROTOBUF_CONSTEXPR JoinRequest::JoinRequest(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::internal::ZeroFieldsBase(_class_data_.base()){}
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::internal::ZeroFieldsBase() {
+}
+#endif  // PROTOBUF_CUSTOM_VTABLE
+struct JoinRequestDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR JoinRequestDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~JoinRequestDefaultTypeInternal() {}
+  union {
+    JoinRequest _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 JoinRequestDefaultTypeInternal _JoinRequest_default_instance_;
+
 inline constexpr GetPositionResponse::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : position_{0},
@@ -159,6 +202,23 @@ static constexpr const ::_pb::ServiceDescriptor**
 const ::uint32_t
     TableStruct_audio_5fsync_2eproto::offsets[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
         protodesc_cold) = {
+        ~0u,  // no _has_bits_
+        PROTOBUF_FIELD_OFFSET(::client::JoinRequest, _internal_metadata_),
+        ~0u,  // no _extensions_
+        ~0u,  // no _oneof_case_
+        ~0u,  // no _weak_field_map_
+        ~0u,  // no _inlined_string_donated_
+        ~0u,  // no _split_
+        ~0u,  // no sizeof(Split)
+        ~0u,  // no _has_bits_
+        PROTOBUF_FIELD_OFFSET(::client::JoinResponse, _internal_metadata_),
+        ~0u,  // no _extensions_
+        ~0u,  // no _oneof_case_
+        ~0u,  // no _weak_field_map_
+        ~0u,  // no _inlined_string_donated_
+        ~0u,  // no _split_
+        ~0u,  // no sizeof(Split)
+        PROTOBUF_FIELD_OFFSET(::client::JoinResponse, _impl_.peer_list_),
         ~0u,  // no _has_bits_
         PROTOBUF_FIELD_OFFSET(::client::PingRequest, _internal_metadata_),
         ~0u,  // no _extensions_
@@ -215,14 +275,18 @@ const ::uint32_t
 
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
-        {0, -1, -1, sizeof(::client::PingRequest)},
-        {8, -1, -1, sizeof(::client::PingResponse)},
-        {16, -1, -1, sizeof(::client::MusicRequest)},
-        {27, -1, -1, sizeof(::client::MusicResponse)},
-        {35, -1, -1, sizeof(::client::GetPositionRequest)},
-        {43, -1, -1, sizeof(::client::GetPositionResponse)},
+        {0, -1, -1, sizeof(::client::JoinRequest)},
+        {8, -1, -1, sizeof(::client::JoinResponse)},
+        {17, -1, -1, sizeof(::client::PingRequest)},
+        {25, -1, -1, sizeof(::client::PingResponse)},
+        {33, -1, -1, sizeof(::client::MusicRequest)},
+        {44, -1, -1, sizeof(::client::MusicResponse)},
+        {52, -1, -1, sizeof(::client::GetPositionRequest)},
+        {60, -1, -1, sizeof(::client::GetPositionResponse)},
 };
 static const ::_pb::Message* const file_default_instances[] = {
+    &::client::_JoinRequest_default_instance_._instance,
+    &::client::_JoinResponse_default_instance_._instance,
     &::client::_PingRequest_default_instance_._instance,
     &::client::_PingResponse_default_instance_._instance,
     &::client::_MusicRequest_default_instance_._instance,
@@ -232,29 +296,32 @@ static const ::_pb::Message* const file_default_instances[] = {
 };
 const char descriptor_table_protodef_audio_5fsync_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\020audio_sync.proto\022\006client\"\r\n\013PingReques"
-    "t\"\016\n\014PingResponse\"D\n\014MusicRequest\022\016\n\006act"
-    "ion\030\001 \001(\t\022\022\n\nwall_clock\030\002 \001(\002\022\020\n\010positio"
-    "n\030\003 \001(\005\"\017\n\rMusicResponse\"\024\n\022GetPositionR"
-    "equest\"\'\n\023GetPositionResponse\022\020\n\010positio"
-    "n\030\001 \001(\0052\313\001\n\rClientHandler\0221\n\004Ping\022\023.clie"
-    "nt.PingRequest\032\024.client.PingResponse\022\?\n\020"
-    "SendMusicCommand\022\024.client.MusicRequest\032\025"
-    ".client.MusicResponse\022F\n\013GetPosition\022\032.c"
-    "lient.GetPositionRequest\032\033.client.GetPos"
-    "itionResponseb\006proto3"
+    "\n\020audio_sync.proto\022\006client\"\r\n\013JoinReques"
+    "t\"!\n\014JoinResponse\022\021\n\tpeer_list\030\001 \003(\t\"\r\n\013"
+    "PingRequest\"\016\n\014PingResponse\"D\n\014MusicRequ"
+    "est\022\016\n\006action\030\001 \001(\t\022\022\n\nwall_clock\030\002 \001(\002\022"
+    "\020\n\010position\030\003 \001(\005\"\017\n\rMusicResponse\"\024\n\022Ge"
+    "tPositionRequest\"\'\n\023GetPositionResponse\022"
+    "\020\n\010position\030\001 \001(\0052\376\001\n\rClientHandler\0221\n\004J"
+    "oin\022\023.client.JoinRequest\032\024.client.JoinRe"
+    "sponse\0221\n\004Ping\022\023.client.PingRequest\032\024.cl"
+    "ient.PingResponse\022\?\n\020SendMusicCommand\022\024."
+    "client.MusicRequest\032\025.client.MusicRespon"
+    "se\022F\n\013GetPosition\022\032.client.GetPositionRe"
+    "quest\032\033.client.GetPositionResponseb\006prot"
+    "o3"
 };
 static ::absl::once_flag descriptor_table_audio_5fsync_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_audio_5fsync_2eproto = {
     false,
     false,
-    421,
+    522,
     descriptor_table_protodef_audio_5fsync_2eproto,
     "audio_sync.proto",
     &descriptor_table_audio_5fsync_2eproto_once,
     nullptr,
     0,
-    6,
+    8,
     schemas,
     file_default_instances,
     TableStruct_audio_5fsync_2eproto::offsets,
@@ -262,6 +329,352 @@ PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_audio_5fsync_2
     file_level_service_descriptors_audio_5fsync_2eproto,
 };
 namespace client {
+// ===================================================================
+
+class JoinRequest::_Internal {
+ public:
+};
+
+JoinRequest::JoinRequest(::google::protobuf::Arena* arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::internal::ZeroFieldsBase(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::internal::ZeroFieldsBase(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(arena_constructor:client.JoinRequest)
+}
+JoinRequest::JoinRequest(
+    ::google::protobuf::Arena* arena,
+    const JoinRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::internal::ZeroFieldsBase(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::internal::ZeroFieldsBase(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  JoinRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+
+  // @@protoc_insertion_point(copy_constructor:client.JoinRequest)
+}
+
+inline void* JoinRequest::PlacementNew_(const void*, void* mem,
+                                        ::google::protobuf::Arena* arena) {
+  return ::new (mem) JoinRequest(arena);
+}
+constexpr auto JoinRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(JoinRequest),
+                                            alignof(JoinRequest));
+}
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::google::protobuf::internal::ClassDataFull JoinRequest::_class_data_ = {
+    ::google::protobuf::internal::ClassData{
+        &_JoinRequest_default_instance_._instance,
+        &_table_.header,
+        nullptr,  // OnDemandRegisterArenaDtor
+        nullptr,  // IsInitialized
+        &JoinRequest::MergeImpl,
+        ::google::protobuf::internal::ZeroFieldsBase::GetNewImpl<JoinRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        &JoinRequest::SharedDtor,
+        ::google::protobuf::internal::ZeroFieldsBase::GetClearImpl<JoinRequest>(), &JoinRequest::ByteSizeLong,
+            &JoinRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+        PROTOBUF_FIELD_OFFSET(JoinRequest, _impl_._cached_size_),
+        false,
+    },
+    &JoinRequest::kDescriptorMethods,
+    &descriptor_table_audio_5fsync_2eproto,
+    nullptr,  // tracker
+};
+const ::google::protobuf::internal::ClassData* JoinRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(_class_data_.tc_table);
+  return _class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<0, 0, 0, 0, 2> JoinRequest::_table_ = {
+  {
+    0,  // no _has_bits_
+    0, // no _extensions_
+    0, 0,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967295,  // skipmap
+    offsetof(decltype(_table_), field_names),  // no field_entries
+    0,  // num_field_entries
+    0,  // num_aux_entries
+    offsetof(decltype(_table_), field_names),  // no aux_entries
+    _class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::client::JoinRequest>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    {::_pbi::TcParser::MiniParse, {}},
+  }}, {{
+    65535, 65535
+  }},
+  // no field_entries, or aux_entries
+  {{
+  }},
+};
+
+
+
+
+
+
+
+
+::google::protobuf::Metadata JoinRequest::GetMetadata() const {
+  return ::google::protobuf::internal::ZeroFieldsBase::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class JoinResponse::_Internal {
+ public:
+};
+
+JoinResponse::JoinResponse(::google::protobuf::Arena* arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:client.JoinResponse)
+}
+inline PROTOBUF_NDEBUG_INLINE JoinResponse::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility, ::google::protobuf::Arena* arena,
+    const Impl_& from, const ::client::JoinResponse& from_msg)
+      : peer_list_{visibility, arena, from.peer_list_},
+        _cached_size_{0} {}
+
+JoinResponse::JoinResponse(
+    ::google::protobuf::Arena* arena,
+    const JoinResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  JoinResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+
+  // @@protoc_insertion_point(copy_constructor:client.JoinResponse)
+}
+inline PROTOBUF_NDEBUG_INLINE JoinResponse::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* arena)
+      : peer_list_{visibility, arena},
+        _cached_size_{0} {}
+
+inline void JoinResponse::SharedCtor(::_pb::Arena* arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+}
+JoinResponse::~JoinResponse() {
+  // @@protoc_insertion_point(destructor:client.JoinResponse)
+  SharedDtor(*this);
+}
+inline void JoinResponse::SharedDtor(MessageLite& self) {
+  JoinResponse& this_ = static_cast<JoinResponse&>(self);
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+inline void* JoinResponse::PlacementNew_(const void*, void* mem,
+                                        ::google::protobuf::Arena* arena) {
+  return ::new (mem) JoinResponse(arena);
+}
+constexpr auto JoinResponse::InternalNewImpl_() {
+  constexpr auto arena_bits = ::google::protobuf::internal::EncodePlacementArenaOffsets({
+      PROTOBUF_FIELD_OFFSET(JoinResponse, _impl_.peer_list_) +
+          decltype(JoinResponse::_impl_.peer_list_)::
+              InternalGetArenaOffset(
+                  ::google::protobuf::Message::internal_visibility()),
+  });
+  if (arena_bits.has_value()) {
+    return ::google::protobuf::internal::MessageCreator::ZeroInit(
+        sizeof(JoinResponse), alignof(JoinResponse), *arena_bits);
+  } else {
+    return ::google::protobuf::internal::MessageCreator(&JoinResponse::PlacementNew_,
+                                 sizeof(JoinResponse),
+                                 alignof(JoinResponse));
+  }
+}
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::google::protobuf::internal::ClassDataFull JoinResponse::_class_data_ = {
+    ::google::protobuf::internal::ClassData{
+        &_JoinResponse_default_instance_._instance,
+        &_table_.header,
+        nullptr,  // OnDemandRegisterArenaDtor
+        nullptr,  // IsInitialized
+        &JoinResponse::MergeImpl,
+        ::google::protobuf::Message::GetNewImpl<JoinResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        &JoinResponse::SharedDtor,
+        ::google::protobuf::Message::GetClearImpl<JoinResponse>(), &JoinResponse::ByteSizeLong,
+            &JoinResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+        PROTOBUF_FIELD_OFFSET(JoinResponse, _impl_._cached_size_),
+        false,
+    },
+    &JoinResponse::kDescriptorMethods,
+    &descriptor_table_audio_5fsync_2eproto,
+    nullptr,  // tracker
+};
+const ::google::protobuf::internal::ClassData* JoinResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(_class_data_.tc_table);
+  return _class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<0, 1, 0, 37, 2> JoinResponse::_table_ = {
+  {
+    0,  // no _has_bits_
+    0, // no _extensions_
+    1, 0,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967294,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    1,  // num_field_entries
+    0,  // num_aux_entries
+    offsetof(decltype(_table_), field_names),  // no aux_entries
+    _class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::client::JoinResponse>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    // repeated string peer_list = 1;
+    {::_pbi::TcParser::FastUR1,
+     {10, 63, 0, PROTOBUF_FIELD_OFFSET(JoinResponse, _impl_.peer_list_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // repeated string peer_list = 1;
+    {PROTOBUF_FIELD_OFFSET(JoinResponse, _impl_.peer_list_), 0, 0,
+    (0 | ::_fl::kFcRepeated | ::_fl::kUtf8String | ::_fl::kRepSString)},
+  }},
+  // no aux_entries
+  {{
+    "\23\11\0\0\0\0\0\0"
+    "client.JoinResponse"
+    "peer_list"
+  }},
+};
+
+PROTOBUF_NOINLINE void JoinResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:client.JoinResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.peer_list_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        ::uint8_t* JoinResponse::_InternalSerialize(
+            const MessageLite& base, ::uint8_t* target,
+            ::google::protobuf::io::EpsCopyOutputStream* stream) {
+          const JoinResponse& this_ = static_cast<const JoinResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+        ::uint8_t* JoinResponse::_InternalSerialize(
+            ::uint8_t* target,
+            ::google::protobuf::io::EpsCopyOutputStream* stream) const {
+          const JoinResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          // @@protoc_insertion_point(serialize_to_array_start:client.JoinResponse)
+          ::uint32_t cached_has_bits = 0;
+          (void)cached_has_bits;
+
+          // repeated string peer_list = 1;
+          for (int i = 0, n = this_._internal_peer_list_size(); i < n; ++i) {
+            const auto& s = this_._internal_peer_list().Get(i);
+            ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+                s.data(), static_cast<int>(s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "client.JoinResponse.peer_list");
+            target = stream->WriteString(1, s, target);
+          }
+
+          if (PROTOBUF_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+            target =
+                ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+                    this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+          }
+          // @@protoc_insertion_point(serialize_to_array_end:client.JoinResponse)
+          return target;
+        }
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        ::size_t JoinResponse::ByteSizeLong(const MessageLite& base) {
+          const JoinResponse& this_ = static_cast<const JoinResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+        ::size_t JoinResponse::ByteSizeLong() const {
+          const JoinResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          // @@protoc_insertion_point(message_byte_size_start:client.JoinResponse)
+          ::size_t total_size = 0;
+
+          ::uint32_t cached_has_bits = 0;
+          // Prevent compiler warnings about cached_has_bits being unused
+          (void)cached_has_bits;
+
+          ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+           {
+            // repeated string peer_list = 1;
+            {
+              total_size +=
+                  1 * ::google::protobuf::internal::FromIntSize(this_._internal_peer_list().size());
+              for (int i = 0, n = this_._internal_peer_list().size(); i < n; ++i) {
+                total_size += ::google::protobuf::internal::WireFormatLite::StringSize(
+                    this_._internal_peer_list().Get(i));
+              }
+            }
+          }
+          return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                                     &this_._impl_._cached_size_);
+        }
+
+void JoinResponse::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
+  auto* const _this = static_cast<JoinResponse*>(&to_msg);
+  auto& from = static_cast<const JoinResponse&>(from_msg);
+  // @@protoc_insertion_point(class_specific_merge_from_start:client.JoinResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  _this->_internal_mutable_peer_list()->MergeFrom(from._internal_peer_list());
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(from._internal_metadata_);
+}
+
+void JoinResponse::CopyFrom(const JoinResponse& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:client.JoinResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void JoinResponse::InternalSwap(JoinResponse* PROTOBUF_RESTRICT other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  _impl_.peer_list_.InternalSwap(&other->_impl_.peer_list_);
+}
+
+::google::protobuf::Metadata JoinResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
 // ===================================================================
 
 class PingRequest::_Internal {

@@ -59,6 +59,12 @@ extern GetPositionRequestDefaultTypeInternal _GetPositionRequest_default_instanc
 class GetPositionResponse;
 struct GetPositionResponseDefaultTypeInternal;
 extern GetPositionResponseDefaultTypeInternal _GetPositionResponse_default_instance_;
+class JoinRequest;
+struct JoinRequestDefaultTypeInternal;
+extern JoinRequestDefaultTypeInternal _JoinRequest_default_instance_;
+class JoinResponse;
+struct JoinResponseDefaultTypeInternal;
+extern JoinResponseDefaultTypeInternal _JoinResponse_default_instance_;
 class MusicRequest;
 struct MusicRequestDefaultTypeInternal;
 extern MusicRequestDefaultTypeInternal _MusicRequest_default_instance_;
@@ -142,7 +148,7 @@ class PingResponse final : public ::google::protobuf::internal::ZeroFieldsBase
     return reinterpret_cast<const PingResponse*>(
         &_PingResponse_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 1;
+  static constexpr int kIndexInFileMessages = 3;
   friend void swap(PingResponse& a, PingResponse& b) { a.Swap(&b); }
   inline void Swap(PingResponse* other) {
     if (other == this) return;
@@ -287,7 +293,7 @@ class PingRequest final : public ::google::protobuf::internal::ZeroFieldsBase
     return reinterpret_cast<const PingRequest*>(
         &_PingRequest_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 0;
+  static constexpr int kIndexInFileMessages = 2;
   friend void swap(PingRequest& a, PingRequest& b) { a.Swap(&b); }
   inline void Swap(PingRequest* other) {
     if (other == this) return;
@@ -432,7 +438,7 @@ class MusicResponse final : public ::google::protobuf::internal::ZeroFieldsBase
     return reinterpret_cast<const MusicResponse*>(
         &_MusicResponse_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 3;
+  static constexpr int kIndexInFileMessages = 5;
   friend void swap(MusicResponse& a, MusicResponse& b) { a.Swap(&b); }
   inline void Swap(MusicResponse* other) {
     if (other == this) return;
@@ -578,7 +584,7 @@ class MusicRequest final : public ::google::protobuf::Message
     return reinterpret_cast<const MusicRequest*>(
         &_MusicRequest_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 2;
+  static constexpr int kIndexInFileMessages = 4;
   friend void swap(MusicRequest& a, MusicRequest& b) { a.Swap(&b); }
   inline void Swap(MusicRequest* other) {
     if (other == this) return;
@@ -739,6 +745,353 @@ class MusicRequest final : public ::google::protobuf::Message
 };
 // -------------------------------------------------------------------
 
+class JoinResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:client.JoinResponse) */ {
+ public:
+  inline JoinResponse() : JoinResponse(nullptr) {}
+  ~JoinResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(JoinResponse* msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(JoinResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR JoinResponse(
+      ::google::protobuf::internal::ConstantInitialized);
+
+  inline JoinResponse(const JoinResponse& from) : JoinResponse(nullptr, from) {}
+  inline JoinResponse(JoinResponse&& from) noexcept
+      : JoinResponse(nullptr, std::move(from)) {}
+  inline JoinResponse& operator=(const JoinResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline JoinResponse& operator=(JoinResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const JoinResponse& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const JoinResponse* internal_default_instance() {
+    return reinterpret_cast<const JoinResponse*>(
+        &_JoinResponse_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 1;
+  friend void swap(JoinResponse& a, JoinResponse& b) { a.Swap(&b); }
+  inline void Swap(JoinResponse* other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(JoinResponse* other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  JoinResponse* New(::google::protobuf::Arena* arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<JoinResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const JoinResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const JoinResponse& from) { JoinResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(
+      ::google::protobuf::MessageLite& to_msg,
+      const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* _InternalSerialize(
+      const MessageLite& msg, ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(JoinResponse* other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(
+      ::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "client.JoinResponse"; }
+
+ protected:
+  explicit JoinResponse(::google::protobuf::Arena* arena);
+  JoinResponse(::google::protobuf::Arena* arena, const JoinResponse& from);
+  JoinResponse(::google::protobuf::Arena* arena, JoinResponse&& from) noexcept
+      : JoinResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* GetClassData() const PROTOBUF_FINAL;
+  static void* PlacementNew_(const void*, void* mem,
+                             ::google::protobuf::Arena* arena);
+  static constexpr auto InternalNewImpl_();
+  static const ::google::protobuf::internal::ClassDataFull _class_data_;
+
+ public:
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPeerListFieldNumber = 1,
+  };
+  // repeated string peer_list = 1;
+  int peer_list_size() const;
+  private:
+  int _internal_peer_list_size() const;
+
+  public:
+  void clear_peer_list() ;
+  const std::string& peer_list(int index) const;
+  std::string* mutable_peer_list(int index);
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void set_peer_list(int index, Arg_&& value, Args_... args);
+  std::string* add_peer_list();
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void add_peer_list(Arg_&& value, Args_... args);
+  const ::google::protobuf::RepeatedPtrField<std::string>& peer_list() const;
+  ::google::protobuf::RepeatedPtrField<std::string>* mutable_peer_list();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<std::string>& _internal_peer_list() const;
+  ::google::protobuf::RepeatedPtrField<std::string>* _internal_mutable_peer_list();
+
+  public:
+  // @@protoc_insertion_point(class_scope:client.JoinResponse)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<
+      0, 1, 0,
+      37, 2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(
+        ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena);
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena, const Impl_& from,
+                          const JoinResponse& from_msg);
+    ::google::protobuf::RepeatedPtrField<std::string> peer_list_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_audio_5fsync_2eproto;
+};
+// -------------------------------------------------------------------
+
+class JoinRequest final : public ::google::protobuf::internal::ZeroFieldsBase
+/* @@protoc_insertion_point(class_definition:client.JoinRequest) */ {
+ public:
+  inline JoinRequest() : JoinRequest(nullptr) {}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(JoinRequest* msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(JoinRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR JoinRequest(
+      ::google::protobuf::internal::ConstantInitialized);
+
+  inline JoinRequest(const JoinRequest& from) : JoinRequest(nullptr, from) {}
+  inline JoinRequest(JoinRequest&& from) noexcept
+      : JoinRequest(nullptr, std::move(from)) {}
+  inline JoinRequest& operator=(const JoinRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline JoinRequest& operator=(JoinRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const JoinRequest& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const JoinRequest* internal_default_instance() {
+    return reinterpret_cast<const JoinRequest*>(
+        &_JoinRequest_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 0;
+  friend void swap(JoinRequest& a, JoinRequest& b) { a.Swap(&b); }
+  inline void Swap(JoinRequest* other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(JoinRequest* other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  JoinRequest* New(::google::protobuf::Arena* arena = nullptr) const {
+    return ::google::protobuf::internal::ZeroFieldsBase::DefaultConstruct<JoinRequest>(arena);
+  }
+  using ::google::protobuf::internal::ZeroFieldsBase::CopyFrom;
+  inline void CopyFrom(const JoinRequest& from) {
+    ::google::protobuf::internal::ZeroFieldsBase::CopyImpl(*this, from);
+  }
+  using ::google::protobuf::internal::ZeroFieldsBase::MergeFrom;
+  void MergeFrom(const JoinRequest& from) {
+    ::google::protobuf::internal::ZeroFieldsBase::MergeImpl(*this, from);
+  }
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+ private:
+  template <typename T>
+  friend ::absl::string_view(
+      ::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "client.JoinRequest"; }
+
+ protected:
+  explicit JoinRequest(::google::protobuf::Arena* arena);
+  JoinRequest(::google::protobuf::Arena* arena, const JoinRequest& from);
+  JoinRequest(::google::protobuf::Arena* arena, JoinRequest&& from) noexcept
+      : JoinRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* GetClassData() const PROTOBUF_FINAL;
+  static void* PlacementNew_(const void*, void* mem,
+                             ::google::protobuf::Arena* arena);
+  static constexpr auto InternalNewImpl_();
+  static const ::google::protobuf::internal::ClassDataFull _class_data_;
+
+ public:
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  // @@protoc_insertion_point(class_scope:client.JoinRequest)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<
+      0, 0, 0,
+      0, 2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(
+        ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena);
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena, const Impl_& from,
+                          const JoinRequest& from_msg);
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  friend struct ::TableStruct_audio_5fsync_2eproto;
+};
+// -------------------------------------------------------------------
+
 class GetPositionResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:client.GetPositionResponse) */ {
  public:
@@ -798,7 +1151,7 @@ class GetPositionResponse final : public ::google::protobuf::Message
     return reinterpret_cast<const GetPositionResponse*>(
         &_GetPositionResponse_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 5;
+  static constexpr int kIndexInFileMessages = 7;
   friend void swap(GetPositionResponse& a, GetPositionResponse& b) { a.Swap(&b); }
   inline void Swap(GetPositionResponse* other) {
     if (other == this) return;
@@ -987,7 +1340,7 @@ class GetPositionRequest final : public ::google::protobuf::internal::ZeroFields
     return reinterpret_cast<const GetPositionRequest*>(
         &_GetPositionRequest_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 4;
+  static constexpr int kIndexInFileMessages = 6;
   friend void swap(GetPositionRequest& a, GetPositionRequest& b) { a.Swap(&b); }
   inline void Swap(GetPositionRequest* other) {
     if (other == this) return;
@@ -1085,6 +1438,78 @@ class GetPositionRequest final : public ::google::protobuf::internal::ZeroFields
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstrict-aliasing"
 #endif  // __GNUC__
+// -------------------------------------------------------------------
+
+// JoinRequest
+
+// -------------------------------------------------------------------
+
+// JoinResponse
+
+// repeated string peer_list = 1;
+inline int JoinResponse::_internal_peer_list_size() const {
+  return _internal_peer_list().size();
+}
+inline int JoinResponse::peer_list_size() const {
+  return _internal_peer_list_size();
+}
+inline void JoinResponse::clear_peer_list() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.peer_list_.Clear();
+}
+inline std::string* JoinResponse::add_peer_list() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  std::string* _s = _internal_mutable_peer_list()->Add();
+  // @@protoc_insertion_point(field_add_mutable:client.JoinResponse.peer_list)
+  return _s;
+}
+inline const std::string& JoinResponse::peer_list(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:client.JoinResponse.peer_list)
+  return _internal_peer_list().Get(index);
+}
+inline std::string* JoinResponse::mutable_peer_list(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:client.JoinResponse.peer_list)
+  return _internal_mutable_peer_list()->Mutable(index);
+}
+template <typename Arg_, typename... Args_>
+inline void JoinResponse::set_peer_list(int index, Arg_&& value, Args_... args) {
+  ::google::protobuf::internal::AssignToString(
+      *_internal_mutable_peer_list()->Mutable(index),
+      std::forward<Arg_>(value), args... );
+  // @@protoc_insertion_point(field_set:client.JoinResponse.peer_list)
+}
+template <typename Arg_, typename... Args_>
+inline void JoinResponse::add_peer_list(Arg_&& value, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::google::protobuf::internal::AddToRepeatedPtrField(*_internal_mutable_peer_list(),
+                               std::forward<Arg_>(value),
+                               args... );
+  // @@protoc_insertion_point(field_add:client.JoinResponse.peer_list)
+}
+inline const ::google::protobuf::RepeatedPtrField<std::string>&
+JoinResponse::peer_list() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:client.JoinResponse.peer_list)
+  return _internal_peer_list();
+}
+inline ::google::protobuf::RepeatedPtrField<std::string>*
+JoinResponse::mutable_peer_list() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable_list:client.JoinResponse.peer_list)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_peer_list();
+}
+inline const ::google::protobuf::RepeatedPtrField<std::string>&
+JoinResponse::_internal_peer_list() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.peer_list_;
+}
+inline ::google::protobuf::RepeatedPtrField<std::string>*
+JoinResponse::_internal_mutable_peer_list() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.peer_list_;
+}
+
 // -------------------------------------------------------------------
 
 // PingRequest
