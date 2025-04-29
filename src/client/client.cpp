@@ -91,8 +91,10 @@ void AudioClient::Play() {
   }
 
   // Wait the amount of time
-  std::this_thread::sleep_for(std::chrono::nanoseconds((GetPeerClientIPs().size()) * 10));
-  LOG_INFO("Playing audio after {} ns", GetPeerClientIPs().size() * 10);
+  // Wait the amount of time
+  int wait_time = peer_network_->GetConnectedPeers().size() * 10;
+  std::this_thread::sleep_for(std::chrono::nanoseconds(wait_time));
+  LOG_INFO("Playing audio after {} ns", wait_time);
   player_.play();
 }
 
@@ -104,7 +106,8 @@ void AudioClient::Pause() {
   }
 
   // Wait the amount of time
-  std::this_thread::sleep_for(std::chrono::nanoseconds(GetPeerClientIPs().size() * 10));
+  int wait_time = peer_network_->GetConnectedPeers().size() * 10;
+  std::this_thread::sleep_for(std::chrono::nanoseconds(wait_time));
   LOG_INFO("Pausing audio");
   player_.pause();
 }
@@ -117,7 +120,8 @@ void AudioClient::Resume() {
   }
 
   // Wait the amount of time
-  std::this_thread::sleep_for(std::chrono::nanoseconds(GetPeerClientIPs().size() * 10));
+  int wait_time = peer_network_->GetConnectedPeers().size() * 10;
+  std::this_thread::sleep_for(std::chrono::nanoseconds(wait_time));
   LOG_INFO("Resuming audio");
   player_.resume();
 }
@@ -130,7 +134,8 @@ void AudioClient::Stop() {
   }
 
   // Wait the amount of time
-  std::this_thread::sleep_for(std::chrono::nanoseconds(GetPeerClientIPs().size() * 10));
+  int wait_time = peer_network_->GetConnectedPeers().size() * 10;
+  std::this_thread::sleep_for(std::chrono::nanoseconds(wait_time));
   LOG_INFO("Stopping audio");
   player_.stop();
 }
