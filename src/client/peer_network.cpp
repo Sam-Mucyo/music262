@@ -4,6 +4,7 @@
 
 #include "include/client.h"
 #include "logger.h"
+#include <ifaddrs.h>
 
 // PeerService implementation
 PeerService::PeerService(AudioClient* client) : client_(client) {
@@ -28,6 +29,7 @@ grpc::Status PeerService::SendMusicCommand(grpc::ServerContext* context,
   const std::string& action = request->action();
   int position = request->position();
   float wall_clock = request->wall_clock();
+  float wait_time = request->wait_time();
 
   LOG_INFO(
       "Received music command from peer {}: action={}, position={}, "
@@ -158,6 +160,14 @@ bool PeerNetwork::ConnectToPeer(const std::string& peer_address) {
       grpc::CreateChannel(peer_address, grpc::InsecureChannelCredentials());
   auto stub = client::ClientHandler::NewStub(channel);
 
+  // // Join request: send your address to peer and receive list of current peers
+  // client::JoinRequest join_request;
+  // client::JoinResponse join_response;
+  // // Get my local address
+  // std::string my_address = GetLocalIPAddress() + ":" + std::to_string(server_port_);
+  // LOG_DEBUG("My local address is: {}:{}", my_address);
+  // join_request.set_address(my_address);
+
   // Test connection with ping
   client::PingRequest ping_request;
   client::PingResponse ping_response;
@@ -239,22 +249,25 @@ void PeerNetwork::BroadcastCommand(const std::string& action, int position) {
   LOG_INFO("Broadcasting command '{}' with position {} to {} peers", action,
            position, peer_list.size());
 
-  // Create the command request
-  client::MusicRequest request;
-  request.set_action(action);
-  request.set_position(position);
-
-  // Use current timestamp
-  auto now = std::chrono::high_resolution_clock::now();
-  auto duration = now.time_since_epoch();
-  auto seconds =
-      std::chrono::duration_cast<std::chrono::duration<float>>(duration)
-          .count();
-  request.set_wall_clock(seconds);
-
   // Send to all connected peers
   int success_count = 0;
   for (const auto& peer_address : peer_list) {
+
+    // Create the command request
+    client::MusicRequest request;
+    request.set_action(action);
+    request.set_position(position);
+
+    // Use current timestamp
+    auto now = std::chrono::high_resolution_clock::now();
+    auto duration = now.time_since_epoch();
+    auto seconds =
+        std::chrono::duration_cast<std::chrono::duration<float>>(duration)
+            .count();
+    request.set_wall_clock(seconds);
+    request.set_wait_time((peer_list.size() - success_count)*10);
+
+    // Create the response object
     client::MusicResponse response;
     grpc::ClientContext context;
     context.set_deadline(std::chrono::system_clock::now() +

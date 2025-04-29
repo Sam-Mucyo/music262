@@ -84,47 +84,49 @@ bool AudioClient::LoadAudio(int song_num) {
 }
 
 void AudioClient::Play() {
-  LOG_INFO("Playing audio");
-  player_.play();
-
   // Broadcast command to peers if enabled and not from broadcast
   if (peer_sync_enabled_ && !command_from_broadcast_ && peer_network_) {
     LOG_DEBUG("Broadcasting play command to peers");
     peer_network_->BroadcastCommand("play", player_.get_position());
   }
+
+  // Wait the amount of time
+  std::this_thread::sleep_for(std::chrono::nanoseconds(GetPeerClientIPs().size() * 10));
+  LOG_INFO("Playing audio");
+  player_.play();
 }
 
 void AudioClient::Pause() {
-  LOG_INFO("Pausing audio");
-  player_.pause();
-
   // Broadcast command to peers if enabled and not from broadcast
   if (peer_sync_enabled_ && !command_from_broadcast_ && peer_network_) {
     LOG_DEBUG("Broadcasting pause command to peers");
     peer_network_->BroadcastCommand("pause", player_.get_position());
   }
+
+  LOG_INFO("Pausing audio");
+  player_.pause();
 }
 
 void AudioClient::Resume() {
-  LOG_INFO("Resuming audio");
-  player_.resume();
-
   // Broadcast command to peers if enabled and not from broadcast
   if (peer_sync_enabled_ && !command_from_broadcast_ && peer_network_) {
     LOG_DEBUG("Broadcasting resume command to peers");
     peer_network_->BroadcastCommand("resume", player_.get_position());
   }
+
+  LOG_INFO("Resuming audio");
+  player_.resume();
 }
 
 void AudioClient::Stop() {
-  LOG_INFO("Stopping audio");
-  player_.stop();
-
   // Broadcast command to peers if enabled and not from broadcast
   if (peer_sync_enabled_ && !command_from_broadcast_ && peer_network_) {
     LOG_DEBUG("Broadcasting stop command to peers");
     peer_network_->BroadcastCommand("stop", 0);
   }
+
+  LOG_INFO("Stopping audio");
+  player_.stop();
 }
 
 unsigned int AudioClient::GetPosition() const { return player_.get_position(); }
