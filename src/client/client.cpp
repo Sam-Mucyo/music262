@@ -103,6 +103,8 @@ void AudioClient::Pause() {
     peer_network_->BroadcastCommand("pause", player_.get_position());
   }
 
+  // Wait the amount of time
+  std::this_thread::sleep_for(std::chrono::nanoseconds(GetPeerClientIPs().size() * 10));
   LOG_INFO("Pausing audio");
   player_.pause();
 }
@@ -114,6 +116,8 @@ void AudioClient::Resume() {
     peer_network_->BroadcastCommand("resume", player_.get_position());
   }
 
+  // Wait the amount of time
+  std::this_thread::sleep_for(std::chrono::nanoseconds(GetPeerClientIPs().size() * 10));
   LOG_INFO("Resuming audio");
   player_.resume();
 }
@@ -125,6 +129,8 @@ void AudioClient::Stop() {
     peer_network_->BroadcastCommand("stop", 0);
   }
 
+  // Wait the amount of time
+  std::this_thread::sleep_for(std::chrono::nanoseconds(GetPeerClientIPs().size() * 10));
   LOG_INFO("Stopping audio");
   player_.stop();
 }
