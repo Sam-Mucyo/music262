@@ -297,6 +297,8 @@ void PeerNetwork::BroadcastCommand(const std::string& action, int position) {
                   status.error_message());
       } else {
         success_count++;
+        std::this_thread::sleep_for(
+            std::chrono::nanoseconds(10));
       }
     }
   }

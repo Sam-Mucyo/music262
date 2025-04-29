@@ -91,8 +91,8 @@ void AudioClient::Play() {
   }
 
   // Wait the amount of time
-  std::this_thread::sleep_for(std::chrono::nanoseconds(GetPeerClientIPs().size() * 10));
-  LOG_INFO("Playing audio");
+  std::this_thread::sleep_for(std::chrono::nanoseconds((GetPeerClientIPs().size()) * 10));
+  LOG_INFO("Playing audio after {} ns", GetPeerClientIPs().size() * 10);
   player_.play();
 }
 
