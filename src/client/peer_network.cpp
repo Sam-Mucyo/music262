@@ -39,6 +39,12 @@ grpc::Status PeerService::SendMusicCommand(grpc::ServerContext* context,
   // Mark that this command came from a broadcast to prevent echo
   client_->SetCommandFromBroadcast(true);
 
+  // Wait appropriate amount of time
+  if (wait_time > 0) {
+    LOG_DEBUG("Waiting for {} seconds before executing command", wait_time);
+    std::this_thread::sleep_for(std::chrono::nanoseconds(static_cast<int>(wait_time * 10)));
+  }
+
   // Execute the requested action
   if (action == "play") {
     client_->Play();
