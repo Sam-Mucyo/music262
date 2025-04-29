@@ -67,6 +67,5 @@ The tests use different mocking strategies:
 
 ## Notes
 
-- The tests require the daydreamin.wav file to be present in the sample_music directory.
 - The tests use preprocessor macros to replace the real CoreAudio functions with mock implementations.
 - The RenderCallback simulation test uses a global variable to access the AudioPlayer instance from the callback function. 
