@@ -15,8 +15,24 @@ grpc::Status PeerService::Ping(grpc::ServerContext* context,
                                const client::PingRequest* request,
                                client::PingResponse* response) {
   LOG_DEBUG("Received ping request from peer: {}", context->peer());
+
+  // Record receive time (t1)
+  double t1 = std::chrono::duration_cast<std::chrono::duration<double>>(
+    std::chrono::steady_clock::now().time_since_epoch())
+    .count();
+
+  // Fill response with t1 and t2
+  response->set_t1(t1);
+
+  // Simulate processing (very minimal delay)
+  double t2 = std::chrono::duration_cast<std::chrono::duration<double>>(
+    std::chrono::steady_clock::now().time_since_epoch())
+    .count();
+  response->set_t2(t2);
+
   return grpc::Status::OK;
 }
+
 
 grpc::Status PeerService::SendMusicCommand(grpc::ServerContext* context,
                                            const client::MusicRequest* request,
@@ -150,6 +166,58 @@ void PeerNetwork::StopServer() {
   LOG_INFO("Peer server stopped");
 }
 
+bool PeerNetwork::SendPingToPeer(const std::string& peer_address) {
+  std::lock_guard<std::mutex> lock(peers_mutex_);
+
+  auto it = peer_stubs_.find(peer_address);
+  if (it == peer_stubs_.end()) {
+    LOG_WARN("Cannot ping: not connected to {}", peer_address);
+    return false;
+  }
+
+  auto& stub = it->second;
+
+  client::PingRequest request;
+  client::PingResponse response;
+  grpc::ClientContext context;
+
+  // t0 = local send time
+  double t0 = std::chrono::duration_cast<std::chrono::duration<double>>(
+                  std::chrono::steady_clock::now().time_since_epoch())
+                  .count();
+  request.set_t0(t0);
+
+  // Send ping
+  auto status = stub->Ping(&context, request, &response);
+
+  if (!status.ok()) {
+    LOG_ERROR("Ping to {} failed: {}", peer_address, status.error_message());
+    return false;
+  }
+
+  // t3 = local receive time
+  double t3 = std::chrono::duration_cast<std::chrono::duration<double>>(
+                  std::chrono::steady_clock::now().time_since_epoch())
+                  .count();
+
+  // Extract t1 and t2 from peer
+  double t1 = response.t1();
+  double t2 = response.t2();
+
+  // Calculate RTT and offset
+  double rtt = (t3 - t0) - (t2 - t1);
+  double offset = ((t1 - t0) + (t2 - t3)) / 2;
+
+  LOG_INFO("Ping to {}: RTT = {:.3f} ms, offset = {:.3f} ms",
+           peer_address, rtt * 1000, offset * 1000);
+
+  // Store for later use
+  peer_offsets_[peer_address] = offset;
+  rtt = static_cast<int>(rtt * 1000);  // store as ms if needed
+
+  return true;
+}
+
 bool PeerNetwork::ConnectToPeer(const std::string& peer_address) {
   std::lock_guard<std::mutex> lock(peers_mutex_);
 
@@ -183,6 +251,9 @@ bool PeerNetwork::ConnectToPeer(const std::string& peer_address) {
 
   LOG_DEBUG("Sending ping to peer {}", peer_address);
   auto status = stub->Ping(&context, ping_request, &ping_response);
+
+  // Get offsets
+  SendPingToPeer(peer_address);
 
   if (!status.ok()) {
     LOG_ERROR("Failed to connect to peer {}: {}", peer_address,

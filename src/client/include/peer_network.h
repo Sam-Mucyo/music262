@@ -19,6 +19,7 @@ class PeerService final : public client::ClientHandler::Service {
  public:
   PeerService(AudioClient* client);
 
+  // Handling a PingRequest as a receiver
   grpc::Status Ping(grpc::ServerContext* context,
                     const client::PingRequest* request,
                     client::PingResponse* response) override;
@@ -50,6 +51,9 @@ class PeerNetwork {
   // Connect to a peer client
   bool ConnectToPeer(const std::string& peer_address);
 
+  // Ping a peer client
+  bool SendPingToPeer(const std::string& peer_address);
+
   // Disconnect from a peer client
   bool DisconnectFromPeer(const std::string& peer_address);
 
@@ -76,5 +80,8 @@ class PeerNetwork {
   // Peer connections
   std::map<std::string, std::unique_ptr<client::ClientHandler::Stub>>
       peer_stubs_;
+  std::map<std::string, int>
+      peer_offsets_;
   mutable std::mutex peers_mutex_;
+  int rtt;
 };
