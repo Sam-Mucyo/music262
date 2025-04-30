@@ -59,6 +59,7 @@ Our initial vision for the system architecture, captured in a diagram around the
 
 ![Initial System Architecture Diagram](docs/notebook/initial_diagram.png)
 
+
 We were thinking:
 
 1.  **Server:** A central entity responsible for:
