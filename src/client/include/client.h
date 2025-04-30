@@ -1,42 +1,49 @@
 #pragma once
 
+#include <grpcpp/grpcpp.h>
+
+#include <memory>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
-// Forward declarations for Protobuf message types
-class PingRequest;
-class PingResponse;
-class MusicRequest;
-class MusicResponse;
-class GetPositionRequest;
-class GetPositionResponse;
+#include "audio_service.grpc.pb.h"
+#include "audioplayer.h"
 
-class Client {
-public:
-    // Constructor
-    Client(const std::vector<std::string>& client_ips, const std::string& server_addr);
+using grpc::Channel;
+using grpc::ClientContext;
+using grpc::ClientReader;
+using grpc::Status;
 
-    // Latency & Connection
-    void connectToClients();
-    void connectToServer();
-    void getLatency(const std::string& ip_address);
+class AudioClient {
+ public:
+  AudioClient(std::shared_ptr<Channel> channel);
 
-    // Handle incoming message logic
-    void parseRequest(const std::string& message); // from a client
-    void handlePingRequest(const PingRequest& req);
-    void handleMusicRequest(const MusicRequest& req);
-    void handleGetPositionRequest(const GetPositionRequest& req);
-    void handlePingResponse(const PingResponse& resp);
-    void handleGetPositionResponse(const GetPositionResponse& resp);
+  // Request the playlist from the server
+  std::vector<std::string> GetPlaylist();
 
-    // Client-side user interaction (send to peers)
-    void userAction(const std::string& command);
+  // Load audio data for a specific song
+  bool LoadAudio(const std::string& song_name);
 
-    // Download song from server
-    void getSong(int song_number);
+  // Play the currently loaded audio
+  void Play();
 
-private:
-    std::unordered_map<std::string, float> active_clients; // ip -> latency
-    std::string server;
+  // Pause the currently playing audio
+  void Pause();
+
+  // Resume the paused audio
+  void Resume();
+
+  // Stop the currently playing audio
+  void Stop();
+
+  // Get the current playback position
+  unsigned int GetPosition() const;
+
+  // Get the list of connected client IPs
+  std::vector<std::string> GetPeerClientIPs();
+
+ private:
+  std::unique_ptr<audio_service::audio_service::Stub> stub_;
+  AudioPlayer player_;
+  std::vector<char> audio_data_;
 };
