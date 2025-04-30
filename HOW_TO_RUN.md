@@ -66,3 +66,11 @@ Client commands:
 - `help` - Show help
 - `exit` - Exit the client
 
+### Unit Tests
+
+After following build instructions:
+```bash
+   cd build
+    ctest --output-on-failure
+```
+
