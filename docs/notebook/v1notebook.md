@@ -3,7 +3,7 @@
 
 ## Motivation and Project Overview
 
-Many of us regularly use sophisticated wireless audio systems like Apple SharePlay/AirPlay 2, Sonos, Spotify Connect/Jam, or Google Cast. These platforms offer the compelling experience of playing music seamlessly across multiple speakers or devices, creating immersive listening environments. While the user experience is often smooth, the underlying technology involves complex proprietary protocols and intricate streaming and control logic. Our curiosity about the inner workings of such systems, combined with a desire to explore distributed systems principles in a practical application, led to the conception of this project.
+Many of us regularly use sophisticated wireless audio systems like Apple SharePlay/AirPlay 2, Sonos, Spotify Connect/Jam, or Google Cast. These platforms offer the compelling experience of playing music seamlessly across multiple speakers or devices, creating immersive listening environments. While the user experience is often smooth, the underlying technology involves complex proprietary protocols and intricate streaming and control logic. We wanted to figure out how these kinds of systems work.
 
 Instead of relying on centralized control or proprietary solutions, we set out to build a decentralized, peer-based distributed system. In our model, multiple machines—initially, our laptops—collaborate to play the same audio track in near-perfect synchronization. The core architecture involves a simple server responsible for hosting audio files. Client devices connect to this server to prefetch and buffer the audio content locally. The crucial aspect, however, lies in the distributed coordination and synchronization among the client peers. The goal is to achieve near-simultaneous playback across all participating clients, even though they operate with independent clocks. Furthermore, the system is designed with fault tolerance in mind, ensuring that if one client node crashes or disconnects, the remaining clients can continue playback without interruption.
 
@@ -57,8 +57,7 @@ Our goal was to build a robust, reasonably performant system while using CS262 c
 
 Our initial vision for the system architecture, captured in a diagram around the time of the proposal, depicted a client-server model augmented with peer-to-peer communication for synchronization:
 
-![Initial System Architecture Diagram](/docs/notebook/Screenshot 2025-04-29 at 11.43.55 PM.png)
-*(Diagram from initial planning)*
+![Initial System Architecture Diagram](docs/notebook/initial_diagram.png)
 
 We were thinking:
 
@@ -245,7 +244,7 @@ The client implementation would need to:
 *   Implement handlers for incoming RPCs (`handle_ping_request`, `handle_music_request`).
 *   Implement logic to broadcast commands to all peers when a user initiates an action (`user_action` function), potentially scheduling the local action based on estimated latencies.
 
-These initial concepts laid the foundation for the peer-to-peer synchronization mechanism. The next part will discuss the implementation efforts, the inevitable challenges encountered when translating these ideas into working code, and the refinements made during Milestones 3 and 4.
+These initial concepts laid the foundation for the peer-to-peer synchronization mechanism.
 
 
 # Part 5: Peer-to-Peer Implementation and Challenges
@@ -282,9 +281,6 @@ Once the communication channels and latency estimates were in place, the logic f
     *   **Default Leader Issue:** The client initiating the connection (`join`) seemed to become a default leader, preventing other clients from taking control.
     Problems in either the command broadcasting, the receiving/scheduling logic, or the interaction with the `AudioPlayer`.
 *   **Refining Synchronization Logic (Apr 28):** Editing the synchronization logic within the `peer_network` component. This involved defining how clients should adjust their internal clocks or schedule actions based on received commands and estimated latencies, including considering the maximum latency among all peers when broadcasting commands to ensure even the slowest peer could potentially sync up.
-
-
-The next part will delve deeper into the specific refinements made to the synchronization logic.
 
 
 # Part 6: Synchronization Refinement
@@ -340,7 +336,7 @@ This edit is an important step (a whole part of its own!) because it moves from 
 
 # Part 7: Testing and Integration
 
-his section focuses on the testing strategies and integration efforts undertaken throughout the project, particularly on April 29th onwards.
+This section focuses on the testing strategies and integration efforts undertaken throughout the project, particularly on April 29th onwards.
 
 ## Importance of Testing
 
@@ -370,8 +366,6 @@ As noted in Part 2 and reflected in our `tests/` directory, we adopted standard 
 *   **Build System Complexity:** Managing dependencies (gRPC, Protobuf, CoreAudio, GTest) within CMake requires careful configuration to ensure consistent builds across development environments and in CI/CD pipelines
 *   **Environment Differences:** Differences between development machines could lead to issues that only appear during integration or system testing
 *   **Debugging Distributed Behavior:** Debugging synchronization issues or race conditions across multiple running processes is really difficult, so we're implementing as much logging (`spdlog`) as we can.
-
- The final part of this notebook will cover the documentation, final demo preparation, and reflections on the project.
 
 # Part 8: Finalization and Future Work
 
