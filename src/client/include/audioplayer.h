@@ -58,6 +58,9 @@ class AudioPlayer {
    */
   unsigned int get_position() const;
 
+  // Get reference to the current position object
+  std::atomic<unsigned int>& get_position_ref() { return currentPosition; }
+
  private:
   static OSStatus RenderCallback(void* inRefCon,
                                  AudioUnitRenderActionFlags* ioActionFlags,

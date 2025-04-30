@@ -45,6 +45,7 @@ std::vector<std::string> AudioClient::GetPlaylist() {
 bool AudioClient::LoadAudio(int song_num) {
   LOG_INFO("Loading audio for song: {}", song_num);
 
+  // Create a request to load audio
   LoadAudioRequest request;
   request.set_song_num(song_num);
 

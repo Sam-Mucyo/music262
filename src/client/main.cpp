@@ -90,7 +90,6 @@ int main(int argc, char** argv) {
       }
     } else if (command.substr(0, 5) == "play ") {
       int song_num = std::stoi(command.substr(5));
-
       std::cout << "Loading " << song_num << "..." << std::endl;
       if (client.LoadAudio(song_num)) {
         std::cout << "Playing " << song_num << "..." << std::endl;
