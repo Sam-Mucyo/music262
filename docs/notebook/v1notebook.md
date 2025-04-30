@@ -57,8 +57,7 @@ Our goal was to build a robust, reasonably performant system while using CS262 c
 
 Our initial vision for the system architecture, captured in a diagram around the time of the proposal, depicted a client-server model augmented with peer-to-peer communication for synchronization:
 
-![Initial System Architecture Diagram](docs/notebook/initial_diagram.png)
-
+![Initial System Architecture Diagram](initial_diagram.png)
 
 We were thinking:
 
