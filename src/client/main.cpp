@@ -50,7 +50,7 @@ int main(int argc, char** argv) {
       grpc::CreateChannel(server_address, grpc::InsecureChannelCredentials()));
 
   // Create peer network and start P2P server automatically
-  auto peer_network = std::make_shared<PeerNetwork>(&client);
+  auto peer_network = std::shared_ptr<PeerNetwork>(new PeerNetwork(&client));
   client.SetPeerNetwork(peer_network);
 
   // Start peer server automatically
