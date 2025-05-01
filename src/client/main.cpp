@@ -21,6 +21,7 @@ void PrintUsage() {
             << "  join <ip:port> - Join a peer for synchronized playback\n"
             << "  leave <ip:port> - Leave a connected peer\n"
             << "  connections - List all active peer connections\n"
+            << "  gossip - Share all active peer connections with all peers\n"
             << "  help - Show this help message\n"
             << "  quit - Exit the client\n";
 }
@@ -141,6 +142,9 @@ int main(int argc, char** argv) {
           std::cout << i + 1 << ". " << connected_peers[i] << std::endl;
         }
       }
+    } else if (command == "gossip") {
+      peer_network->BroadcastGossip();
+      std::cout << "Gossiping peer connections to all peers." << std::endl;
     } else if (command == "help") {
       PrintUsage();
     } else if (command == "quit" || command == "exit") {

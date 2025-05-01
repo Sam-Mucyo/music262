@@ -6,6 +6,25 @@
 #include "logger.h"
 #include <ifaddrs.h>
 
+// Helper: get first non-loopback IPv4 address
+std::string GetLocalIPAddress() {
+  struct ifaddrs* ifas = nullptr;
+  if (getifaddrs(&ifas) == -1) return "";
+  for (auto* ifa = ifas; ifa; ifa = ifa->ifa_next) {
+    if (!ifa->ifa_addr || ifa->ifa_addr->sa_family != AF_INET) continue;
+    std::string name(ifa->ifa_name);
+    if (name == "lo0") continue;
+    auto* addr = (struct sockaddr_in*)ifa->ifa_addr;
+    char buf[INET_ADDRSTRLEN];
+    if (inet_ntop(AF_INET, &addr->sin_addr, buf, sizeof(buf))) {
+      freeifaddrs(ifas);
+      return std::string(buf);
+    }
+  }
+  freeifaddrs(ifas);
+  return "";
+}
+
 // PeerService implementation
 PeerService::PeerService(AudioClient* client) : client_(client) {
   LOG_DEBUG("PeerService initialized");
@@ -15,6 +34,41 @@ grpc::Status PeerService::Ping(grpc::ServerContext* context,
                                const client::PingRequest* request,
                                client::PingResponse* response) {
   LOG_DEBUG("Received ping request from peer: {}", context->peer());
+  return grpc::Status::OK;
+}
+
+grpc::Status PeerService::Gossip(grpc::ServerContext* context,
+                                const client::GossipRequest* request,
+                                client::GossipResponse* response) {
+  LOG_INFO("Received GossipRequest from peer: {}", context->peer());
+
+  if (!client_) {
+  LOG_ERROR("Client not initialized in PeerService");
+  return grpc::Status(grpc::StatusCode::INTERNAL, "Client not initialized");
+  }
+
+  std::shared_ptr<PeerNetwork> network_ptr = client_->GetPeerNetwork();
+  if (!network_ptr) {
+    LOG_ERROR("Peer network not available");
+    return grpc::Status(grpc::StatusCode::INTERNAL, "Peer network not available");
+  }
+  // use raw pointer or keep using shared_ptr directly
+  PeerNetwork* network = network_ptr.get();
+  if (!network) {
+  LOG_ERROR("Peer network not available");
+  return grpc::Status(grpc::StatusCode::INTERNAL, "Peer network not available");
+  }
+
+  // Clear and reconnect
+  network->DisconnectFromAllPeers();
+  for (const auto& addr : request->peer_list()) {
+    // Skip itself
+    if (addr == GetLocalIPAddress() + ":" + std::to_string(network->GetServerPort())) {
+      continue;
+    }
+    network->ConnectToPeer(addr);
+  }
+
   return grpc::Status::OK;
 }
 
@@ -166,14 +220,6 @@ bool PeerNetwork::ConnectToPeer(const std::string& peer_address) {
       grpc::CreateChannel(peer_address, grpc::InsecureChannelCredentials());
   auto stub = client::ClientHandler::NewStub(channel);
 
-  // // Join request: send your address to peer and receive list of current peers
-  // client::JoinRequest join_request;
-  // client::JoinResponse join_response;
-  // // Get my local address
-  // std::string my_address = GetLocalIPAddress() + ":" + std::to_string(server_port_);
-  // LOG_DEBUG("My local address is: {}:{}", my_address);
-  // join_request.set_address(my_address);
-
   // Test connection with ping
   client::PingRequest ping_request;
   client::PingResponse ping_response;
@@ -234,6 +280,41 @@ std::vector<std::string> PeerNetwork::GetConnectedPeers() const {
 
   LOG_DEBUG("Retrieved list of {} connected peers", peers.size());
   return peers;
+}
+
+void PeerNetwork::BroadcastGossip() {
+  std::vector<std::string> peer_list;
+  {
+    std::lock_guard<std::mutex> lock(peers_mutex_);
+    for (const auto& entry : peer_stubs_) {
+      peer_list.push_back(entry.first);
+    }
+  }
+
+  // Add clients to list of addresses
+  client::GossipRequest request;
+  for (const auto& peer : peer_list) {
+    request.add_peer_list(peer);
+  }
+  request.add_peer_list(GetLocalIPAddress() + ":" +
+                   std::to_string(server_port_));
+
+  for (const auto& peer : peer_list) {
+    grpc::ClientContext context;
+    client::GossipResponse response;
+
+    {
+      std::lock_guard<std::mutex> lock(peers_mutex_);
+      auto it = peer_stubs_.find(peer);
+      if (it == peer_stubs_.end()) continue;
+      auto status = it->second->Gossip(&context, request, &response);
+      if (!status.ok()) {
+        LOG_ERROR("Failed to send gossip to {}: {}", peer, status.error_message());
+      } else {
+        LOG_INFO("Sent gossip to {}", peer);
+      }
+    }
+  }
 }
 
 void PeerNetwork::BroadcastCommand(const std::string& action, int position) {

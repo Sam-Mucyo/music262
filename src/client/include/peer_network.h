@@ -23,6 +23,10 @@ class PeerService final : public client::ClientHandler::Service {
                     const client::PingRequest* request,
                     client::PingResponse* response) override;
 
+  grpc::Status Gossip(grpc::ServerContext* context,
+                    const client::GossipRequest* request,
+                    client::GossipResponse* response) override;
+
   grpc::Status SendMusicCommand(grpc::ServerContext* context,
                                 const client::MusicRequest* request,
                                 client::MusicResponse* response) override;
@@ -56,11 +60,17 @@ class PeerNetwork {
   // Disconnect from all peers
   void DisconnectFromAllPeers();
 
+  // Get the server port
+  int GetServerPort() const { return server_port_; }
+
   // Get list of connected peers
   std::vector<std::string> GetConnectedPeers() const;
 
   // Broadcast a command to all connected peers
   void BroadcastCommand(const std::string& action, int position);
+
+  // Broadcast gossip to all connected peers
+  void BroadcastGossip();
 
  private:
   // Main client reference

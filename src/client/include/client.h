@@ -50,6 +50,9 @@ class AudioClient {
   // Get reference to audio player (for peer service)
   AudioPlayer& GetPlayer() { return player_; }
 
+  // Get reference to the peer network
+  std::shared_ptr<PeerNetwork> GetPeerNetwork() { return peer_network_; }
+
   // Get reference to the audio player's audio data
   std::vector<char>& GetAudioData() { return audio_data_; }
 
