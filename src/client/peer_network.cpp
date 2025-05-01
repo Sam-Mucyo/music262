@@ -1,9 +1,10 @@
 #include "include/peer_network.h"
+#include "include/client.h"
+#include "common/include/logger.h"
 
 #include <chrono>
-
-#include "include/client.h"
-#include "logger.h"
+#include <thread>
+#include <spdlog/spdlog.h>
 #include <ifaddrs.h>
 
 // PeerService implementation
@@ -100,7 +101,7 @@ grpc::Status PeerService::GetPosition(grpc::ServerContext* context,
 
 // PeerNetwork implementation
 PeerNetwork::PeerNetwork(AudioClient* client)
-    : client_(client), server_running_(false), server_port_(50052) {
+    : client_(client), server_running_(false), server_port_(50052), rtt(0) {
   LOG_DEBUG("PeerNetwork initialized");
 }
 
@@ -116,37 +117,47 @@ bool PeerNetwork::StartServer(int port) {
     return true;
   }
 
-  server_port_ = port;
-
-  // Create service
-  service_ = std::make_unique<PeerService>(client_);
-
-  // Build and start server
-  std::string server_address = "0.0.0.0:" + std::to_string(port);
-  grpc::ServerBuilder builder;
-
-  builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
-  builder.RegisterService(service_.get());
-
-  LOG_INFO("Starting peer server on {}", server_address);
-  server_ = builder.BuildAndStart();
-  if (!server_) {
-    LOG_ERROR("Failed to start peer server on port {}", port);
+  if (!client_) {
+    LOG_ERROR("Client not initialized in PeerNetwork");
     return false;
   }
 
-  LOG_INFO("Peer server started successfully on {}", server_address);
+  server_port_ = port;
 
-  // Start server thread
-  server_running_ = true;
-  server_thread_ = std::thread([this]() {
-    LOG_DEBUG("Peer server thread started");
-    server_->Wait();
-    LOG_DEBUG("Peer server thread exiting");
-    server_running_ = false;
-  });
+  try {
+    // Create service
+    service_ = std::make_unique<PeerService>(client_);
 
-  return true;
+    // Build and start server
+    std::string server_address = "0.0.0.0:" + std::to_string(port);
+    grpc::ServerBuilder builder;
+
+    builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+    builder.RegisterService(service_.get());
+
+    LOG_INFO("Starting peer server on {}", server_address);
+    server_ = builder.BuildAndStart();
+    if (!server_) {
+      LOG_ERROR("Failed to start peer server on port {}", port);
+      return false;
+    }
+
+    LOG_INFO("Peer server started successfully on {}", server_address);
+
+    // Start server thread
+    server_running_ = true;
+    server_thread_ = std::thread([this]() {
+      LOG_DEBUG("Peer server thread started");
+      server_->Wait();
+      LOG_DEBUG("Peer server thread exiting");
+      server_running_ = false;
+    });
+
+    return true;
+  } catch (const std::exception& e) {
+    LOG_ERROR("Exception while starting server: {}", e.what());
+    return false;
+  }
 }
 
 void PeerNetwork::StopServer() {
@@ -156,14 +167,23 @@ void PeerNetwork::StopServer() {
   }
 
   LOG_INFO("Stopping peer server");
-  server_->Shutdown();
 
-  if (server_thread_.joinable()) {
-    server_thread_.join();
+  try {
+    if (server_) {
+      server_->Shutdown();
+    }
+
+    if (server_thread_.joinable()) {
+      server_thread_.join();
+    }
+
+    server_running_ = false;
+    server_.reset();
+    service_.reset();
+    LOG_INFO("Peer server stopped");
+  } catch (const std::exception& e) {
+    LOG_ERROR("Exception while stopping server: {}", e.what());
   }
-
-  server_running_ = false;
-  LOG_INFO("Peer server stopped");
 }
 
 bool PeerNetwork::SendPingToPeer(const std::string& peer_address) {

@@ -11,8 +11,13 @@ message JoinResponse {
 }
 
 // Messages for ping
-message PingRequest {}
-message PingResponse {}
+message PingRequest {
+  double t0 = 1;  // client send time
+}
+message PingResponse {
+  double t1 = 1;  // server receive time
+  double t2 = 2;  // server send time
+}
 
 // Messages for music control
 message MusicRequest {

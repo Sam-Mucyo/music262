@@ -1,7 +1,10 @@
 #include "include/client.h"
-
 #include "include/peer_network.h"
-#include "logger.h"
+#include "common/include/logger.h"
+
+#include <spdlog/spdlog.h>
+#include <chrono>
+#include <thread>
 
 using audio_service::AudioChunk;
 using audio_service::LoadAudioRequest;

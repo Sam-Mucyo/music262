@@ -14,6 +14,14 @@ add_executable(audioplayer_test
     ${CMAKE_SOURCE_DIR}/src/client/audioplayer.cpp
 )
 
+# Create test executable for PeerNetwork
+add_executable(peer_network_test
+    test_peer_network.cpp
+    ${CMAKE_SOURCE_DIR}/src/client/peer_network.cpp
+    ${CMAKE_SOURCE_DIR}/src/client/client.cpp
+    ${CMAKE_SOURCE_DIR}/src/client/audioplayer.cpp
+)
+
 # Link against Google Test and required libraries
 target_link_libraries(audioplayer_test
     PRIVATE
@@ -23,5 +31,19 @@ target_link_libraries(audioplayer_test
     "-framework AudioToolbox"
 )
 
-# Register test with CTest
+target_link_libraries(peer_network_test
+    PRIVATE
+    GTest::gtest_main
+    GTest::gmock_main
+    spdlog::spdlog
+    proto_lib
+    gRPC::grpc++
+    gRPC::grpc
+    protobuf::libprotobuf
+    "-framework CoreAudio"
+    "-framework AudioToolbox"
+)
+
+# Register tests with CTest
 gtest_discover_tests(audioplayer_test)
+gtest_discover_tests(peer_network_test)

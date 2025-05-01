@@ -21,48 +21,48 @@ class PeerNetwork;
 class AudioClient {
  public:
   AudioClient(std::shared_ptr<Channel> channel);
-  ~AudioClient();
+  virtual ~AudioClient();
 
   // Request the playlist from the server
-  std::vector<std::string> GetPlaylist();
+  virtual std::vector<std::string> GetPlaylist();
 
   // Load audio data for a specific song
-  bool LoadAudio(int song_num);
+  virtual bool LoadAudio(int song_num);
 
   // Play the currently loaded audio
-  void Play();
+  virtual void Play();
 
   // Pause the currently playing audio
-  void Pause();
+  virtual void Pause();
 
   // Resume the paused audio
-  void Resume();
+  virtual void Resume();
 
   // Stop the currently playing audio
-  void Stop();
+  virtual void Stop();
 
   // Get the current playback position
-  unsigned int GetPosition() const;
+  virtual unsigned int GetPosition() const;
 
   // Get the list of connected client IPs
-  std::vector<std::string> GetPeerClientIPs();
+  virtual std::vector<std::string> GetPeerClientIPs();
 
   // Get reference to audio player (for peer service)
-  AudioPlayer& GetPlayer() { return player_; }
+  virtual AudioPlayer& GetPlayer() { return player_; }
 
   // Get reference to the audio player's audio data
-  std::vector<char>& GetAudioData() { return audio_data_; }
+  virtual std::vector<char>& GetAudioData() { return audio_data_; }
 
   // Control whether commands should be broadcast to peers
-  void EnablePeerSync(bool enable);
-  bool IsPeerSyncEnabled() const { return peer_sync_enabled_; }
+  virtual void EnablePeerSync(bool enable);
+  virtual bool IsPeerSyncEnabled() const { return peer_sync_enabled_; }
 
   // Set the peer network for command broadcasting
-  void SetPeerNetwork(std::shared_ptr<PeerNetwork> peer_network);
+  virtual void SetPeerNetwork(std::shared_ptr<PeerNetwork> peer_network);
 
   // Flag to prevent broadcast loops
-  void SetCommandFromBroadcast(bool value) { command_from_broadcast_ = value; }
-  bool IsCommandFromBroadcast() const { return command_from_broadcast_; }
+  virtual void SetCommandFromBroadcast(bool value) { command_from_broadcast_ = value; }
+  virtual bool IsCommandFromBroadcast() const { return command_from_broadcast_; }
 
  private:
   std::unique_ptr<audio_service::audio_service::Stub> stub_;
