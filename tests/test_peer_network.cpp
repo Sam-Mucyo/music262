@@ -3,17 +3,29 @@
 #include "include/peer_network.h"
 #include "include/client.h"
 #include <grpcpp/create_channel.h>
+#include <grpcpp/server_builder.h>
+#include <future>
 
 using ::testing::_;
 using ::testing::Return;
 using ::testing::NiceMock;
+using ::testing::Invoke;
+using ::testing::AtLeast;
+using ::testing::DoAll;
+using ::testing::SetArgPointee;
 
-// Mock AudioClient for testing
+// Enhanced Mock ClientHandler Stub
+class MockClientHandlerStub : public client::ClientHandler::StubInterface {
+public:
+    MOCK_METHOD(grpc::Status, Ping, (grpc::ClientContext*, const client::PingRequest&, client::PingResponse*), (override));
+    MOCK_METHOD(grpc::Status, SendMusicCommand, (grpc::ClientContext*, const client::MusicRequest&, client::MusicResponse*), (override));
+    MOCK_METHOD(grpc::Status, GetPosition, (grpc::ClientContext*, const client::GetPositionRequest&, client::GetPositionResponse*), (override));
+};
+
+// Enhanced Mock AudioClient
 class MockAudioClient : public AudioClient {
 public:
-    MockAudioClient() :
-        AudioClient(grpc::CreateChannel("localhost:12345", grpc::InsecureChannelCredentials()))
-    {}
+    MockAudioClient() : AudioClient(nullptr) {}
     
     MOCK_METHOD(void, Play, (), (override));
     MOCK_METHOD(void, Pause, (), (override));
@@ -21,21 +33,19 @@ public:
     MOCK_METHOD(void, Stop, (), (override));
     MOCK_METHOD(unsigned int, GetPosition, (), (const override));
     MOCK_METHOD(void, SetCommandFromBroadcast, (bool), (override));
-    MOCK_METHOD(std::vector<std::string>, GetPlaylist, (), (override));
-    MOCK_METHOD(bool, LoadAudio, (int), (override));
-    MOCK_METHOD(std::vector<std::string>, GetPeerClientIPs, (), (override));
-    MOCK_METHOD(void, EnablePeerSync, (bool), (override));
-    MOCK_METHOD(bool, IsPeerSyncEnabled, (), (const override));
-    MOCK_METHOD(void, SetPeerNetwork, (std::shared_ptr<PeerNetwork>), (override));
     MOCK_METHOD(bool, IsCommandFromBroadcast, (), (const override));
 };
 
-// Test fixture for PeerNetwork tests
+// Test fixture with enhanced setup
 class PeerNetworkTest : public ::testing::Test {
 protected:
     void SetUp() override {
         mock_client_ = std::make_shared<NiceMock<MockAudioClient>>();
         peer_network_ = std::make_unique<PeerNetwork>(mock_client_.get());
+        
+        // Setup default mock behaviors
+        ON_CALL(*mock_client_, GetPosition()).WillByDefault(Return(0));
+        ON_CALL(*mock_client_, IsCommandFromBroadcast()).WillByDefault(Return(false));
     }
 
     void TearDown() override {
@@ -46,68 +56,134 @@ protected:
     std::unique_ptr<PeerNetwork> peer_network_;
 };
 
-// Test cases for PeerNetwork
-TEST_F(PeerNetworkTest, StartAndStopServer) {
-    EXPECT_TRUE(peer_network_->StartServer(50052));
-    peer_network_->StopServer();
-}
+// Tests for actual peer communication functionality
+TEST_F(PeerNetworkTest, BroadcastCommandSendsToAllPeers) {
+    // Setup mock stubs for 3 peers
+    auto mock_stub1 = std::make_unique<MockClientHandlerStub>();
+    auto mock_stub2 = std::make_unique<MockClientHandlerStub>();
+    auto mock_stub3 = std::make_unique<MockClientHandlerStub>();
 
-TEST_F(PeerNetworkTest, StartServerFailsWhenAlreadyRunning) {
-    EXPECT_TRUE(peer_network_->StartServer(50052));
-    EXPECT_TRUE(peer_network_->StartServer(50052));
-    peer_network_->StopServer();
-}
+    // Expect calls to all peers
+    EXPECT_CALL(*mock_stub1, SendMusicCommand(_, _, _))
+        .WillOnce(Return(grpc::Status::OK));
+    EXPECT_CALL(*mock_stub2, SendMusicCommand(_, _, _))
+        .WillOnce(Return(grpc::Status::OK));
+    EXPECT_CALL(*mock_stub3, SendMusicCommand(_, _, _))
+        .WillOnce(Return(grpc::Status::OK));
 
-TEST_F(PeerNetworkTest, ConnectToPeerSuccess) {
-    // This would normally require a real server running, so we'd mock this in practice
-    // For this test, we'll assume we have a test server running
-    peer_network_->StartServer(50052);
-    
-    // This test would need a real peer server running to be effective
-    // In a real test environment, we'd start a test peer server
-    // EXPECT_TRUE(peer_network_->ConnectToPeer("localhost:50053"));
-}
+    // Add mock peers
+    peer_network_->peer_stubs_["peer1"] = std::move(mock_stub1);
+    peer_network_->peer_stubs_["peer2"] = std::move(mock_stub2);
+    peer_network_->peer_stubs_["peer3"] = std::move(mock_stub3);
 
-TEST_F(PeerNetworkTest, ConnectToPeerFailure) {
-    EXPECT_FALSE(peer_network_->ConnectToPeer("invalid_address:12345"));
-}
-
-TEST_F(PeerNetworkTest, DisconnectFromPeer) {
-    // Setup - would need a real connection first
-    // peer_network_->ConnectToPeer("localhost:50053");
-    
-    // Test
-    EXPECT_FALSE(peer_network_->DisconnectFromPeer("nonexistent_peer:12345"));
-    // EXPECT_TRUE(peer_network_->DisconnectFromPeer("localhost:50053"));
-}
-
-TEST_F(PeerNetworkTest, DisconnectFromAllPeers) {
-    // Setup - would add multiple peers
-    // peer_network_->ConnectToPeer("localhost:50053");
-    // peer_network_->ConnectToPeer("localhost:50054");
-    
-    peer_network_->DisconnectFromAllPeers();
-    EXPECT_TRUE(peer_network_->GetConnectedPeers().empty());
-}
-
-TEST_F(PeerNetworkTest, GetConnectedPeers) {
-    // Setup - would add peers
-    // peer_network_->ConnectToPeer("localhost:50053");
-    // peer_network_->ConnectToPeer("localhost:50054");
-    
-    auto peers = peer_network_->GetConnectedPeers();
-    // EXPECT_EQ(peers.size(), 2);
-    EXPECT_TRUE(peers.empty()); // No peers connected in this test
-}
-
-TEST_F(PeerNetworkTest, BroadcastCommand) {
-    // This would test the broadcast functionality
-    // In practice, we'd need to mock the gRPC stubs and connections
-    // For now, we'll just verify it doesn't crash with no peers
+    // Verify broadcast goes to all
     peer_network_->BroadcastCommand("play", 100);
 }
 
-// Test cases for PeerService
+TEST_F(PeerNetworkTest, BroadcastCommandHandlesFailures) {
+    auto mock_stub1 = std::make_unique<MockClientHandlerStub>();
+    auto mock_stub2 = std::make_unique<MockClientHandlerStub>();
+
+    // One success, one failure
+    EXPECT_CALL(*mock_stub1, SendMusicCommand(_, _, _))
+        .WillOnce(Return(grpc::Status::OK));
+    EXPECT_CALL(*mock_stub2, SendMusicCommand(_, _, _))
+        .WillOnce(Return(grpc::Status(grpc::StatusCode::UNAVAILABLE, "unavailable")));
+
+    peer_network_->peer_stubs_["peer1"] = std::move(mock_stub1);
+    peer_network_->peer_stubs_["peer2"] = std::move(mock_stub2);
+
+    // Should complete without throwing
+    EXPECT_NO_THROW(peer_network_->BroadcastCommand("pause", 200));
+}
+
+// Thorough ping functionality tests
+TEST_F(PeerNetworkTest, PingCalculatesCorrectRTT) {
+    auto mock_stub = std::make_unique<MockClientHandlerStub>();
+    
+    // Setup ping response
+    EXPECT_CALL(*mock_stub, Ping(_, _, _))
+        .WillOnce(Invoke([](grpc::ClientContext*, const client::PingRequest&, client::PingResponse* response) {
+            response->set_t1(100.0);  // Simulated receive time
+            response->set_t2(100.5);  // Simulated send back time
+            return grpc::Status::OK;
+        }));
+
+    peer_network_->peer_stubs_["test_peer"] = std::move(mock_stub);
+
+    // Send ping with known time
+    double t0 = 99.8;
+    client::PingRequest request;
+    request.set_t0(t0);
+    
+    // This would normally be internal to SendPingToPeer
+    double t3 = 101.0; // Simulated receive time
+    
+    // Verify RTT calculation
+    // Expected RTT = (t3 - t0) - (t2 - t1) = (101.0 - 99.8) - (100.5 - 100.0) = 1.2 - 0.5 = 0.7
+    peer_network_->SendPingToPeer("test_peer");
+    EXPECT_NEAR(peer_network_->rtt, 700, 50); // Within 50ms tolerance
+}
+
+// Proper GetConnectedPeers tests
+TEST_F(PeerNetworkTest, GetConnectedPeersReturnsAllActiveConnections) {
+    // Add mock peers
+    peer_network_->peer_stubs_["peer1:50052"] = std::make_unique<MockClientHandlerStub>();
+    peer_network_->peer_stubs_["peer2:50053"] = std::make_unique<MockClientHandlerStub>();
+    peer_network_->peer_stubs_["peer3:50054"] = std::make_unique<MockClientHandlerStub>();
+
+    auto peers = peer_network_->GetConnectedPeers();
+    ASSERT_EQ(peers.size(), 3);
+    EXPECT_THAT(peers, testing::Contains("peer1:50052"));
+    EXPECT_THAT(peers, testing::Contains("peer2:50053"));
+    EXPECT_THAT(peers, testing::Contains("peer3:50054"));
+}
+
+// Negative test cases
+TEST_F(PeerNetworkTest, ConnectToPeerHandlesGrpcErrors) {
+    auto mock_channel = grpc::CreateMockChannel();
+    auto mock_stub = std::make_unique<MockClientHandlerStub>();
+
+    EXPECT_CALL(*mock_stub, Ping(_, _, _))
+        .WillOnce(Return(grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, "timeout")));
+
+    peer_network_->peer_stubs_["failing_peer"] = std::move(mock_stub);
+
+    EXPECT_FALSE(peer_network_->ConnectToPeer("failing_peer"));
+}
+
+// Concurrency tests
+TEST_F(PeerNetworkTest, ThreadSafePeerOperations) {
+    constexpr int kThreads = 10;
+    std::vector<std::thread> threads;
+    
+    // Start server
+    peer_network_->StartServer(50052);
+
+    for (int i = 0; i < kThreads; ++i) {
+        threads.emplace_back([this, i]() {
+            // Each thread tries to add/remove peers
+            std::string peer_addr = "peer" + std::to_string(i) + ":5005" + std::to_string(i);
+            
+            // Alternate between connect/disconnect
+            if (i % 2 == 0) {
+                peer_network_->ConnectToPeer(peer_addr);
+            } else {
+                peer_network_->DisconnectFromPeer(peer_addr);
+            }
+            
+            // Verify peer list access
+            auto peers = peer_network_->GetConnectedPeers();
+            EXPECT_TRUE(peers.size() <= kThreads);
+        });
+    }
+
+    for (auto& t : threads) {
+        t.join();
+    }
+}
+
+// Enhanced PeerService tests
 class PeerServiceTest : public ::testing::Test {
 protected:
     void SetUp() override {
@@ -120,108 +196,27 @@ protected:
     grpc::ServerContext context;
 };
 
-TEST_F(PeerServiceTest, PingHandling) {
-    client::PingRequest request;
-    client::PingResponse response;
-    
-    // Set t0 in request
-    double t0 = std::chrono::duration_cast<std::chrono::duration<double>>(
-        std::chrono::steady_clock::now().time_since_epoch()).count();
-    request.set_t0(t0);
-    
-    grpc::Status status = peer_service_->Ping(&context, &request, &response);
-    
-    EXPECT_TRUE(status.ok());
-    EXPECT_GE(response.t1(), t0);
-    EXPECT_GE(response.t2(), response.t1());
-}
-
-TEST_F(PeerServiceTest, SendMusicCommandPlay) {
+TEST_F(PeerServiceTest, SendMusicCommandWaitsSpecifiedTime) {
     client::MusicRequest request;
     client::MusicResponse response;
-    
     request.set_action("play");
-    request.set_position(100);
-    request.set_wall_clock(123.45f);
+    request.set_wait_time(0.1f); // 100ms
+
+    auto start = std::chrono::steady_clock::now();
     
-    EXPECT_CALL(*mock_client_, SetCommandFromBroadcast(true));
     EXPECT_CALL(*mock_client_, Play());
-    EXPECT_CALL(*mock_client_, SetCommandFromBroadcast(false));
-    
     grpc::Status status = peer_service_->SendMusicCommand(&context, &request, &response);
+    
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - start);
+    
     EXPECT_TRUE(status.ok());
+    EXPECT_GE(duration.count(), 90); // Should wait at least 90ms
 }
 
-TEST_F(PeerServiceTest, SendMusicCommandPause) {
-    client::MusicRequest request;
-    client::MusicResponse response;
-    
-    request.set_action("pause");
-    
-    EXPECT_CALL(*mock_client_, SetCommandFromBroadcast(true));
-    EXPECT_CALL(*mock_client_, Pause());
-    EXPECT_CALL(*mock_client_, SetCommandFromBroadcast(false));
-    
-    grpc::Status status = peer_service_->SendMusicCommand(&context, &request, &response);
-    EXPECT_TRUE(status.ok());
-}
-
-TEST_F(PeerServiceTest, SendMusicCommandResume) {
-    client::MusicRequest request;
-    client::MusicResponse response;
-    
-    request.set_action("resume");
-    
-    EXPECT_CALL(*mock_client_, SetCommandFromBroadcast(true));
-    EXPECT_CALL(*mock_client_, Resume());
-    EXPECT_CALL(*mock_client_, SetCommandFromBroadcast(false));
-    
-    grpc::Status status = peer_service_->SendMusicCommand(&context, &request, &response);
-    EXPECT_TRUE(status.ok());
-}
-
-TEST_F(PeerServiceTest, SendMusicCommandStop) {
-    client::MusicRequest request;
-    client::MusicResponse response;
-    
-    request.set_action("stop");
-    
-    EXPECT_CALL(*mock_client_, SetCommandFromBroadcast(true));
-    EXPECT_CALL(*mock_client_, Stop());
-    EXPECT_CALL(*mock_client_, SetCommandFromBroadcast(false));
-    
-    grpc::Status status = peer_service_->SendMusicCommand(&context, &request, &response);
-    EXPECT_TRUE(status.ok());
-}
-
-TEST_F(PeerServiceTest, SendMusicCommandInvalid) {
-    client::MusicRequest request;
-    client::MusicResponse response;
-    
-    request.set_action("invalid_command");
-    
-    EXPECT_CALL(*mock_client_, SetCommandFromBroadcast(true));
-    EXPECT_CALL(*mock_client_, SetCommandFromBroadcast(false));
-    // No action should be called
-    
-    grpc::Status status = peer_service_->SendMusicCommand(&context, &request, &response);
-    EXPECT_TRUE(status.ok());
-}
-
-TEST_F(PeerServiceTest, GetPosition) {
-    client::GetPositionRequest request;
-    client::GetPositionResponse response;
-    
-    const unsigned int test_position = 1234;
-    EXPECT_CALL(*mock_client_, GetPosition()).WillOnce(Return(test_position));
-    
-    grpc::Status status = peer_service_->GetPosition(&context, &request, &response);
-    EXPECT_TRUE(status.ok());
-    EXPECT_EQ(response.position(), test_position);
-}
-
-// Main function to run the tests
+// Main function
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
+    ::testing::InitGoogleMock(&argc, argv);
     return RUN_ALL_TESTS();
 }

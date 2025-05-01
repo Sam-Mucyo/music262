@@ -200,6 +200,8 @@ bool PeerNetwork::SendPingToPeer(const std::string& peer_address) {
   client::PingRequest request;
   client::PingResponse response;
   grpc::ClientContext context;
+  auto deadline = std::chrono::system_clock::now() + std::chrono::milliseconds(200);
+  context.set_deadline(deadline);
 
   // t0 = local send time
   double t0 = std::chrono::duration_cast<std::chrono::duration<double>>(
