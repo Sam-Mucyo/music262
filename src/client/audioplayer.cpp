@@ -20,13 +20,19 @@ AudioPlayer::~AudioPlayer() {
 }
 
 bool AudioPlayer::load(const std::string& filePath) {
+  // Stop playback if currently playing
+  if (playing.load()) {
+    playing.store(false);
+    AudioOutputUnitStop(audioUnit);
+  }
+
   std::ifstream file(filePath, std::ios::binary);
   if (!file) {
     std::cerr << "Could not open WAV file: " << filePath << std::endl;
     return false;
   }
 
-  // Read header
+  // Read header (checked tests)
   file.read(reinterpret_cast<char*>(&header), sizeof(WavHeader));
   if (std::strncmp(header.riff, "RIFF", 4) != 0 ||
       std::strncmp(header.wave, "WAVE", 4) != 0) {
@@ -38,7 +44,7 @@ bool AudioPlayer::load(const std::string& filePath) {
   audioData.clear();
   file.seekg(sizeof(WavHeader), std::ios::beg);
   audioData.assign(std::istreambuf_iterator<char>(file), {});
-  currentPosition.store(0);
+  currentPosition.store(sizeof(WavHeader));
 
   return setupAudioUnit();
 }
@@ -159,7 +165,7 @@ void AudioPlayer::resume() {
 void AudioPlayer::stop() {
   if (playing.load()) {
     playing.store(false);
-    currentPosition.store(0);
+    currentPosition.store(sizeof(WavHeader));
     AudioOutputUnitStop(audioUnit);
     std::cout << "Stopped audio.\n";
   } else {
@@ -184,7 +190,10 @@ OSStatus AudioPlayer::RenderCallback(void* inRefCon,
   int bytesPerFrame = bytesPerSample * channels;
 
   unsigned int position = player->currentPosition.load();
-  unsigned int bytesAvailable = player->audioData.size() - position;
+  unsigned int dataPosition =
+      position -
+      sizeof(WavHeader);  // Adjust position to be relative to audio data
+  unsigned int bytesAvailable = player->audioData.size() - dataPosition;
   unsigned int framesAvailable = bytesAvailable / bytesPerFrame;
 
   UInt32 framesToRender = std::min(inNumberFrames, framesAvailable);
@@ -192,8 +201,9 @@ OSStatus AudioPlayer::RenderCallback(void* inRefCon,
   // Read audio to buffer
   for (UInt32 i = 0; i < framesToRender; ++i) {
     for (int ch = 0; ch < channels; ++ch) {
-      int idx = position + (i * bytesPerFrame) + (ch * bytesPerSample);
-      int16_t sample = *reinterpret_cast<int16_t*>(&player->audioData[idx]);
+      int idx = dataPosition + (i * bytesPerFrame) + (ch * bytesPerSample);
+      int16_t sample =
+          *reinterpret_cast<const int16_t*>(&player->audioData[idx]);
       outBuffer[i * channels + ch] = sample / 32768.0f;
     }
   }
@@ -205,7 +215,12 @@ OSStatus AudioPlayer::RenderCallback(void* inRefCon,
     }
   }
 
-  player->currentPosition.fetch_add(framesToRender * bytesPerFrame);
+  // Update position
+  if (framesToRender > 0) {
+    player->currentPosition.fetch_add(framesToRender * bytesPerFrame);
+  }
+
+  // If we've reached the end of the file, stop playback
   if (framesToRender < inNumberFrames) {
     player->playing.store(false);
   }

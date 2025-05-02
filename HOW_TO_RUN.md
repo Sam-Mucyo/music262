@@ -95,3 +95,11 @@ Client commands:
 
 The server streams the audio file to the client, which stores it in memory and plays it locally.
 
+### Unit Tests
+
+After following build instructions:
+```bash
+   cd build
+    ctest --output-on-failure
+```
+
