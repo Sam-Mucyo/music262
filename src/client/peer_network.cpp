@@ -69,6 +69,8 @@ grpc::Status PeerService::Gossip(grpc::ServerContext* context,
     network->ConnectToPeer(addr);
   }
 
+  // Calculate average offset for future use
+  // network->SetAverageOffset(CalculateAverageOffset());
   return grpc::Status::OK;
 }
 
@@ -282,6 +284,57 @@ std::vector<std::string> PeerNetwork::GetConnectedPeers() const {
   return peers;
 }
 
+float PeerNetwork::CalculateAverageOffset() const {
+  std::lock_guard<std::mutex> lock(peers_mutex_);
+
+  if (peer_stubs_.empty()) {
+    LOG_DEBUG("No peers connected, cannot calculate average offset");
+    return 0.0f;
+  }
+
+  float total_offset = 0;
+  float rtt = 0;
+  for (const auto& entry : peer_stubs_) {
+    client::PingRequest request;
+    client::PingResponse response;
+    grpc::ClientContext context;
+
+    // Set t0 current time
+    int t0 = static_cast<int>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now().time_since_epoch())
+            .count());
+
+    auto status = entry.second->Ping(&context, request, &response);
+
+    if (!status.ok()) {
+      LOG_ERROR("Failed to get offset from peer {}: {}", entry.first,
+                status.error_message());
+      continue;
+    }
+
+    // Get t1, t2 from response
+    int t1 = static_cast<int>(response.t1());
+    int t2 = static_cast<int>(response.t2());
+
+    // Set t3 current time
+    int t3 = static_cast<int>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now().time_since_epoch())
+            .count());
+    
+    // Calculate rtt and offset
+    float rtt = std::max(rtt, float((t3 - t0) - (t2 - t1)));
+    float offset = (t1 - t0 + t2 - t3) / 2;
+
+    total_offset += offset;
+  }
+
+  // assign peer network avg_offset to this
+  avg_offset_ = float(total_offset / peer_stubs_.size());
+  return avg_offset_;
+}
+
 void PeerNetwork::BroadcastGossip() {
   std::vector<std::string> peer_list;
   {
@@ -315,6 +368,8 @@ void PeerNetwork::BroadcastGossip() {
       }
     }
   }
+  // Calculate average offset for future use
+  CalculateAverageOffset();
 }
 
 void PeerNetwork::BroadcastCommand(const std::string& action, int position) {

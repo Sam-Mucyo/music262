@@ -142,6 +142,14 @@ int main(int argc, char** argv) {
           std::cout << i + 1 << ". " << connected_peers[i] << std::endl;
         }
       }
+      float average_offset = peer_network->GetAverageOffset();
+      if (average_offset > 0) {
+        std::cout << "Average offset: "
+                  << average_offset << " ns"
+                  << std::endl;
+      } else {
+        std::cout << "Average offset: NA" << std::endl;
+      }
     } else if (command == "gossip") {
       peer_network->BroadcastGossip();
       std::cout << "Gossiping peer connections to all peers." << std::endl;

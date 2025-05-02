@@ -10,7 +10,10 @@ message GossipRequest {
 
 // Messages for ping
 message PingRequest {}
-message PingResponse {}
+message PingResponse {
+  int32 t1 = 1;
+  int32 t2 = 2;
+}
 
 // Messages for music control
 message MusicRequest {

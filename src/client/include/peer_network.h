@@ -66,6 +66,12 @@ class PeerNetwork {
   // Get list of connected peers
   std::vector<std::string> GetConnectedPeers() const;
 
+  // Calculate average offset from peers
+  float CalculateAverageOffset() const;
+
+  // Get the average offset from peers
+  float GetAverageOffset() const { return avg_offset_; }
+
   // Broadcast a command to all connected peers
   void BroadcastCommand(const std::string& action, int position);
 
@@ -87,4 +93,6 @@ class PeerNetwork {
   std::map<std::string, std::unique_ptr<client::ClientHandler::Stub>>
       peer_stubs_;
   mutable std::mutex peers_mutex_;
+  mutable float rtt_;  // Maximum round-trip time for ping
+  mutable float avg_offset_;  // Average offset from peers
 };
