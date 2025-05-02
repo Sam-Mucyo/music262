@@ -1,78 +1,103 @@
 #include "include/client.h"
-#include <chrono>
+
 #include <iostream>
-#include <thread>
 
-// --- Constructor ---
-Client::Client(const std::vector<std::string> &client_ips,
-               const std::string &server_addr)
-    : server(server_addr) {
-  connectToClients();
-  connectToServer();
-}
+using audio_service::AudioChunk;
+using audio_service::LoadAudioRequest;
+using audio_service::PeerListRequest;
+using audio_service::PeerListResponse;
+using audio_service::PlaylistRequest;
+using audio_service::PlaylistResponse;
+AudioClient::AudioClient(std::shared_ptr<Channel> channel)
+    : stub_(audio_service::audio_service::NewStub(channel)), player_() {}
 
-// --- Client Connection ---
-void Client::connectToClients() {
-  for (const auto &ip : active_clients) {
-    getLatency(ip.first);
-  }
-}
+std::vector<std::string> AudioClient::GetPlaylist() {
+  PlaylistRequest request;
+  PlaylistResponse response;
+  ClientContext context;
 
-void Client::connectToServer() {
-  // TODO: Connect to central server
-}
+  Status status = stub_->GetPlaylist(&context, request, &response);
 
-// --- Ping Handling ---
-void Client::getLatency(const std::string &ip_address) {
-  // TODO: Send PingRequest multiple times and measure average latency
-}
-
-// --- Request Parsing ---
-void Client::parseRequest(const std::string &message) {
-  // TODO: parse header, dispatch to appropriate handler
-}
-
-// --- Request Handlers ---
-void Client::handlePingRequest(const PingRequest &req) {
-  // TODO: send empty PingResponse immediately
-}
-
-void Client::handlePingResponse(const PingResponse &resp) {
-  // TODO: measure latency and update active_clients
-}
-
-void Client::handleMusicRequest(const MusicRequest &req) {
-  // TODO: handle start/pause/resume/stop based on fields in req
-}
-
-void Client::handleGetPositionRequest(const GetPositionRequest &req) {
-  // TODO: respond with current player position
-}
-
-void Client::handleGetPositionResponse(const GetPositionResponse &resp) {
-  // TODO: update or log external position
-}
-
-// --- Server communication ---
-void Client::getSong(int song_number) {
-  // TODO: download file from server, maybe store locally or load into
-  // AudioPlayer
-}
-
-// --- User command handler ---
-void Client::userAction(const std::string &command) {
-  if (command == "play") {
-    // TODO: Send MusicRequest to all peers with wall_clock and position = 0
-  } else if (command == "pause") {
-    // TODO: Send MusicRequest with action = pause, current time & player
-    // position
-  } else if (command == "resume") {
-    // TODO: Send MusicRequest to resume playback at a wall-clock time
-  } else if (command == "stop") {
-    // TODO: Send stop MusicRequest to all clients
-  } else if (command == "position") {
-    // TODO: Send GetPositionRequest to a specified client
+  std::vector<std::string> playlist;
+  if (status.ok()) {
+    for (const auto& song : response.song_names()) {
+      playlist.push_back(song);
+    }
   } else {
-    std::cout << "Unknown command: " << command << std::endl;
+    std::cout << "GetPlaylist RPC failed: " << status.error_message()
+              << std::endl;
   }
+
+  return playlist;
+}
+
+bool AudioClient::LoadAudio(const std::string& song_name) {
+  LoadAudioRequest request;
+  request.set_song_name(song_name);
+
+  ClientContext context;
+  std::unique_ptr<ClientReader<AudioChunk>> reader(
+      stub_->LoadAudio(&context, request));
+
+  // Clear previously loaded audio data
+  audio_data_.clear();
+
+  // Process the audio stream
+  AudioChunk chunk;
+  size_t total_bytes = 0;
+
+  while (reader->Read(&chunk)) {
+    const std::string& data = chunk.data();
+    // Append data to our in-memory buffer
+    audio_data_.insert(audio_data_.end(), data.begin(), data.end());
+    total_bytes += data.size();
+  }
+
+  Status status = reader->Finish();
+  if (status.ok()) {
+    std::cout << "Successfully received " << total_bytes << " bytes for "
+              << song_name << std::endl;
+
+    // Load audio data into player from memory
+    if (!player_.loadFromMemory(audio_data_.data(), audio_data_.size())) {
+      std::cerr << "Failed to load audio data into player" << std::endl;
+      return false;
+    }
+
+    return true;
+  } else {
+    std::cout << "LoadAudio RPC failed: " << status.error_message()
+              << std::endl;
+    return false;
+  }
+}
+
+void AudioClient::Play() { player_.play(); }
+
+void AudioClient::Pause() { player_.pause(); }
+
+void AudioClient::Resume() { player_.resume(); }
+
+void AudioClient::Stop() { player_.stop(); }
+
+unsigned int AudioClient::GetPosition() const { return player_.get_position(); }
+
+std::vector<std::string> AudioClient::GetPeerClientIPs() {
+  PeerListRequest request;
+  PeerListResponse response;
+  ClientContext context;
+
+  Status status = stub_->GetPeerClientIPs(&context, request, &response);
+
+  std::vector<std::string> peers;
+  if (status.ok()) {
+    for (const auto& peer : response.client_ips()) {
+      peers.push_back(peer);
+    }
+  } else {
+    std::cout << "GetPeerClientIPs RPC failed: " << status.error_message()
+              << std::endl;
+  }
+
+  return peers;
 }
