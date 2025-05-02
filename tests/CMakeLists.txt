@@ -1,73 +1,46 @@
 # Tests CMakeLists.txt
 cmake_minimum_required(VERSION 3.10)
-project(audioplayer_tests)
+project(music262_tests)
 
 # Find GTest package
 find_package(GTest REQUIRED)
 
-# Include directories for tests
+# Common include directories for all tests
 include_directories(
     ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/src/client
-    ${CMAKE_SOURCE_DIR}/src/common
 )
 
-# Create test executable for AudioPlayer with mock tests
-add_executable(audioplayer_mock_test
-    audioplayer_mock_test.cpp
-    ${CMAKE_SOURCE_DIR}/src/client/audioplayer.cpp
-)
-
-# Link against Google Test and required libraries
-target_link_libraries(audioplayer_mock_test
-    PRIVATE
+# Define common test libraries
+set(COMMON_TEST_LIBRARIES
     gtest
     gmock
     gtest_main
     spdlog
+)
+
+# Define Mac-specific frameworks
+set(MAC_FRAMEWORKS
     "-framework CoreAudio"
     "-framework AudioToolbox"
 )
 
-# Register test with CTest
-gtest_discover_tests(audioplayer_mock_test)
+# Function to add test with proper dependencies
+function(add_module_test TEST_NAME TEST_SOURCE MODULE_SOURCE)
+    add_executable(${TEST_NAME} ${TEST_SOURCE} ${MODULE_SOURCE})
+    
+    # Link against common test libraries
+    target_link_libraries(${TEST_NAME} PRIVATE ${COMMON_TEST_LIBRARIES})
+    
+    # Add Mac frameworks if needed
+    if(APPLE)
+        target_link_libraries(${TEST_NAME} PRIVATE ${MAC_FRAMEWORKS})
+    endif()
+    
+    # Register with CTest
+    gtest_discover_tests(${TEST_NAME})
+endfunction()
 
-# Create test executable for AudioPlayer with CoreAudio mocks
-add_executable(audioplayer_coreaudio_test
-    audioplayer_test.cpp
-    ${CMAKE_SOURCE_DIR}/src/client/audioplayer.cpp
-)
-
-# Link against Google Test and required libraries
-target_link_libraries(audioplayer_coreaudio_test
-    PRIVATE
-    gtest
-    gmock
-    gtest_main
-    spdlog
-    "-framework CoreAudio"
-    "-framework AudioToolbox"
-)
-
-# Register test with CTest
-gtest_discover_tests(audioplayer_coreaudio_test)
-
-# Create test executable for AudioPlayer with callback simulation
-add_executable(audioplayer_callback_test
-    audioplayer_callback_test.cpp
-    ${CMAKE_SOURCE_DIR}/src/client/audioplayer.cpp
-)
-
-# Link against Google Test and required libraries
-target_link_libraries(audioplayer_callback_test
-    PRIVATE
-    gtest
-    gmock
-    gtest_main
-    spdlog
-    "-framework CoreAudio"
-    "-framework AudioToolbox"
-)
-
-# Register test with CTest
-gtest_discover_tests(audioplayer_callback_test)
+# Add subdirectories for each module's tests
+add_subdirectory(client)
+add_subdirectory(common)
+add_subdirectory(server)

@@ -1,8 +1,22 @@
-# AudioPlayer Tests
+# Music262 Tests
 
-This directory contains unit tests for the AudioPlayer class. The tests use Google Test and Google Mock to test the functionality of the AudioPlayer class.
+This directory contains unit tests for the Music262 application. The tests use Google Test and Google Mock to test the functionality of various components.
 
-## Test Files
+## Test Structure
+
+The test directory structure mirrors the src directory structure:
+
+```
+tests/
+├── client/           # Tests for client components
+│   ├── audioplayer_mock_test.cpp
+│   ├── audioplayer_test.cpp
+│   └── audioplayer_callback_test.cpp
+├── common/           # Tests for common components
+└── server/           # Tests for server components
+```
+
+### Client Tests
 
 - `audioplayer_mock_test.cpp`: Tests using mock AudioAPI and FileSystem classes
 - `audioplayer_coreaudio_test.cpp`: Tests using mocked CoreAudio APIs
@@ -28,17 +42,16 @@ To build and run the tests, follow these steps:
    make
    ```
 
-4. Run the tests:
+4. Run all tests:
    ```
    ctest
    ```
 
-Or run individual test executables:
+Or run individual test executables from the bin directory:
    ```
-   ./audioplayer_mock_test
-   ./audioplayer_coreaudio_test
-   ./_file_test
-   ./audioplayer_callback_test
+   ./bin/audioplayer_mock_test
+   ./bin/audioplayer_coreaudio_test
+   ./bin/audioplayer_callback_test
    ```
 
 ## Test Coverage
@@ -68,4 +81,24 @@ The tests use different mocking strategies:
 ## Notes
 
 - The tests use preprocessor macros to replace the real CoreAudio functions with mock implementations.
-- The RenderCallback simulation test uses a global variable to access the AudioPlayer instance from the callback function. 
+- The RenderCallback simulation test uses a global variable to access the AudioPlayer instance from the callback function.
+
+## Adding New Tests
+
+To add a new test for a component:
+
+1. Create a new test file in the appropriate subdirectory (client, common, or server)
+2. Add the test to the corresponding CMakeLists.txt using the `add_module_test` function
+
+Example for adding a new client test:
+
+```cmake
+# In tests/client/CMakeLists.txt
+add_module_test(
+    client_test                                           # Test executable name
+    ${CMAKE_CURRENT_SOURCE_DIR}/client_test.cpp           # Test source file
+    ${CMAKE_SOURCE_DIR}/src/client/client.cpp             # Source file being tested
+)
+```
+
+The test structure is designed to scale automatically with new components and tests without requiring manual updates to the main CMakeLists.txt file.
