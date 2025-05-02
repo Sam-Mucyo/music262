@@ -7,6 +7,9 @@ build/
 .idea/
 *.swp
 *.swo
+.cache/
+compile_commands.json
+
 
 # OS generated files
 .DS_Store
