@@ -85,8 +85,10 @@ class AudioServiceImpl final : public audio_service::audio_service::Service {
       grpc::ServerContext* context,
       const audio_service::LoadAudioRequest* request,
       grpc::ServerWriter<audio_service::AudioChunk>* writer) override {
-    std::string song_name = request->song_name();
-    LOG_INFO("Received request to load song: {}", song_name);
+    int song_num = request->song_num();
+    LOG_INFO("Received request to load song: {}", song_num);
+
+    std::string song_name = playlist_[song_num - 1];
 
     // Check if the requested song exists
     std::string file_path = audio_directory_ + "/" + song_name;
@@ -177,6 +179,8 @@ class AudioServiceImpl final : public audio_service::audio_service::Service {
     std::cout << "Server Status:" << std::endl;
     std::cout << "  Songs available: " << playlist_.size() << std::endl;
 
+    std::cout << "  IP Address: " << GetLocalIPAddress() << std::endl;
+    std::cout << "  Port: " << 50051 << std::endl;  // TODO: hardcoded for now
     std::lock_guard<std::mutex> lock(clients_mutex_);
     std::cout << "  Connected clients: " << connected_clients_.size()
               << std::endl;

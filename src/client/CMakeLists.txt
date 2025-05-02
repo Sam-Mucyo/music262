@@ -3,7 +3,7 @@ add_executable(music_client
     main.cpp
     client.cpp
     audioplayer.cpp
-    client.cpp
+    peer_network.cpp
 )
 
 # Include directories

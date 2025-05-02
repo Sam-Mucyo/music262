@@ -14,7 +14,7 @@ message PlaylistRequest {
 
 message PlaylistResponse { repeated string song_names = 1; }
 
-message LoadAudioRequest { string song_name = 1; }
+message LoadAudioRequest { int32 song_num = 1; }
 
 message AudioChunk { bytes data = 1; }
 
