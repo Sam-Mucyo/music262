@@ -98,7 +98,7 @@ grpc::Status PeerService::SendMusicCommand(grpc::ServerContext* context,
   // Wait appropriate amount of time
   if (wait_time > 0) {
     LOG_DEBUG("Waiting for {} seconds before executing command", wait_time);
-    std::this_thread::sleep_for(std::chrono::nanoseconds(static_cast<int>(wait_time * 10)));
+    std::this_thread::sleep_for(std::chrono::nanoseconds(static_cast<int>(wait_time)));
   }
 
   // Execute the requested action
