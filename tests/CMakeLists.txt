@@ -16,6 +16,7 @@ set(COMMON_TEST_LIBRARIES
     gmock
     gtest_main
     spdlog
+    test_utils
 )
 
 # Define Mac-specific frameworks
@@ -41,6 +42,7 @@ function(add_module_test TEST_NAME TEST_SOURCE MODULE_SOURCE)
 endfunction()
 
 # Add subdirectories for each module's tests
+# Note: testlib must be first as it builds the test_utils library
+add_subdirectory(testlib)
 add_subdirectory(client)
-add_subdirectory(common)
 add_subdirectory(server)
