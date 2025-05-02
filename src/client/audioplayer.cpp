@@ -13,17 +13,21 @@ AudioPlayer::AudioPlayer()
 AudioPlayer::~AudioPlayer() {
   playing.store(false);
   if (audioUnit) {
-    // AudioOutputUnitStop(audioUnit);
+    AudioOutputUnitStop(audioUnit);
     AudioUnitUninitialize(audioUnit);
     AudioComponentInstanceDispose(audioUnit);
+    audioUnit = nullptr;
   }
 }
 
 bool AudioPlayer::load(const std::string& filePath) {
-  // Stop playback if currently playing
-  if (playing.load()) {
+  // Always stop playback and cleanup when loading a new file
+  if (audioUnit) {
     playing.store(false);
     AudioOutputUnitStop(audioUnit);
+    AudioUnitUninitialize(audioUnit);
+    AudioComponentInstanceDispose(audioUnit);
+    audioUnit = nullptr;
   }
 
   std::ifstream file(filePath, std::ios::binary);
@@ -50,6 +54,15 @@ bool AudioPlayer::load(const std::string& filePath) {
 }
 
 bool AudioPlayer::loadFromMemory(const char* data, size_t size) {
+  // Always stop playback and cleanup when loading a new file
+  if (audioUnit) {
+    playing.store(false);
+    AudioOutputUnitStop(audioUnit);
+    AudioUnitUninitialize(audioUnit);
+    AudioComponentInstanceDispose(audioUnit);
+    audioUnit = nullptr;
+  }
+  
   if (size < sizeof(WavHeader)) {
     std::cerr << "Data too small to be a valid WAV file." << std::endl;
     return false;
@@ -132,14 +145,24 @@ void AudioPlayer::play() {
     return;
   }
 
-  if (AudioOutputUnitStart(audioUnit) != noErr) {
-    std::cerr << "Failed to start audio unit.\n";
-    return;
+  // Reset position to the beginning if we're at the end of the file
+  unsigned int totalSize = sizeof(WavHeader) + audioData.size();
+  if (currentPosition.load() >= totalSize) {
+    currentPosition.store(sizeof(WavHeader));
   }
 
-  playing.store(true);
-  AudioOutputUnitStart(audioUnit);
-  return;
+  // Only start the audio unit if we're not already playing
+  if (!playing.load()) {
+    playing.store(true);
+    if (AudioOutputUnitStart(audioUnit) != noErr) {
+      std::cerr << "Failed to start audio unit.\n";
+      playing.store(false);
+      return;
+    }
+    std::cout << "Started audio playback.\n";
+  } else {
+    std::cout << "Audio is already playing.\n";
+  }
 }
 
 void AudioPlayer::pause() {
@@ -223,6 +246,8 @@ OSStatus AudioPlayer::RenderCallback(void* inRefCon,
   // If we've reached the end of the file, stop playback
   if (framesToRender < inNumberFrames) {
     player->playing.store(false);
+    // Also stop the audio unit to prevent silent playback
+    AudioOutputUnitStop(player->audioUnit);
   }
 
   return noErr;
