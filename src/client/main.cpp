@@ -143,12 +143,17 @@ int main(int argc, char** argv) {
         }
       }
       float average_offset = peer_network->GetAverageOffset();
+      float max_rtt = peer_network->GetRTT();
       if (average_offset > 0) {
         std::cout << "Average offset: "
                   << average_offset << " ns"
                   << std::endl;
+        std::cout << "Max RTT: "
+                  << peer_network->GetRTT() << " ns"
+                  << std::endl;
       } else {
         std::cout << "Average offset: NA" << std::endl;
+        std::cout << "Max RTT: NA" << std::endl;
       }
     } else if (command == "gossip") {
       peer_network->BroadcastGossip();

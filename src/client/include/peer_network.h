@@ -72,6 +72,9 @@ class PeerNetwork {
   // Get the average offset from peers
   float GetAverageOffset() const { return avg_offset_; }
 
+  // Get the maximum round-trip time
+  float GetRTT() const { return rtt_; }
+
   // Broadcast a command to all connected peers
   void BroadcastCommand(const std::string& action);
 
