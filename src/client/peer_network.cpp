@@ -120,16 +120,12 @@ grpc::Status PeerService::SendMusicCommand(grpc::ServerContext* context,
   int64_t offset_time = client_->GetPeerNetwork()->GetAverageOffset();
   LOG_INFO("Average offset: {}", offset_time);
   const int64_t new_target_time = target_time - offset_time;
-  const int64_t new_target_time_plus = target_time + offset_time;
   LOG_INFO("Local target time (adjusted minus): {}", new_target_time);
-  LOG_INFO("Local target time (adjusted plus): {}", new_target_time_plus);
   const int64_t sleep_time = new_target_time - NowNs();
-  const int64_t sleep_time_plus = new_target_time_plus - NowNs();
   LOG_INFO("Sleeping for {} ns", sleep_time);
-  LOG_INFO("Sleeping for {} ns", sleep_time_plus);
 
-  if (sleep_time_plus > 0) {
-    std::this_thread::sleep_for(std::chrono::nanoseconds(sleep_time_plus));
+  if (sleep_time > 0) {
+    std::this_thread::sleep_for(std::chrono::nanoseconds(sleep_time));
   }
 
   // Execute the requested action
@@ -356,17 +352,17 @@ int64_t PeerNetwork::CalculateAverageOffset() {
     total_offset += offset;
   } 
 
-  // assign peer network avg_offset to this
-  // avg_offset_ = static_cast<int64_t>(total_offset / peer_stubs_.size());
-  avg_offset_.store(
-  static_cast<int64_t>(total_offset / peer_stubs_.size()),
-    std::memory_order_relaxed);
-  return avg_offset_.load(std::memory_order_relaxed);    
-  // return avg_offset_;
+  // // assign peer network avg_offset to this
+  // // avg_offset_ = static_cast<int64_t>(total_offset / peer_stubs_.size());
+  // avg_offset_.store(
+  // static_cast<int64_t>(total_offset / peer_stubs_.size()),
+  //   std::memory_order_relaxed);
+  // return avg_offset_.load(std::memory_order_relaxed);    
+  // // return avg_offset_;
 
   // New way to calculate offset
   avg_offset_.store(
-    static_cast<int64_t>((total_offset + NowNs()) / (peer_stubs_.size() + 1)),
+    static_cast<int64_t>((total_offset + NowNs()) / (peer_stubs_.size() + 1)) - NowNs(),
     std::memory_order_relaxed);
   return avg_offset_.load(std::memory_order_relaxed);
 }
@@ -479,17 +475,13 @@ void PeerNetwork::BroadcastCommand(const std::string& action) {
   LOG_INFO("Global target time: {}", target_time);
   LOG_INFO("Average offset: {}", avg_offset_.load());
   const int64_t new_target_time = target_time - avg_offset_.load();
-  const int64_t new_target_time_plus = target_time + avg_offset_.load();
   LOG_INFO("Local target time (adjusted minus): {}", new_target_time);
-  LOG_INFO("Local target time (adjusted plus): {}", new_target_time_plus);
 
   // sleep for
   const int64_t sleep_time = new_target_time - NowNs();
-  const int64_t sleep_time_plus = new_target_time_plus - NowNs();
   LOG_INFO("Sleeping for {} ns", sleep_time);
-  LOG_INFO("Sleeping for {} ns", sleep_time_plus);
-  if (sleep_time_plus > 0) {
-    std::this_thread::sleep_for(std::chrono::nanoseconds(sleep_time_plus));
+  if (sleep_time > 0) {
+    std::this_thread::sleep_for(std::chrono::nanoseconds(sleep_time));
   }
   
   LOG_INFO("Broadcast complete: successfully sent to {}/{} peers",
