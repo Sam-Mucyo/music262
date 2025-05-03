@@ -67,10 +67,10 @@ class PeerNetwork {
   std::vector<std::string> GetConnectedPeers() const;
 
   // Calculate average offset from peers
-  float CalculateAverageOffset() const;
+  int64_t CalculateAverageOffset();
 
   // Get the average offset from peers
-  float GetAverageOffset() const { return avg_offset_; }
+  int64_t GetAverageOffset() const { return avg_offset_; }
 
   // Get the maximum round-trip time
   float GetRTT() const { return rtt_; }
@@ -97,5 +97,5 @@ class PeerNetwork {
       peer_stubs_;
   mutable std::mutex peers_mutex_;
   mutable float rtt_;  // Maximum round-trip time for ping
-  mutable float avg_offset_;  // Average offset from peers
+  std::atomic<int64_t> avg_offset_{0};  // Average offset from peers
 };

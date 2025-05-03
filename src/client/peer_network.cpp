@@ -1,6 +1,7 @@
 #include "include/peer_network.h"
 
 #include <chrono>
+#include <cstdint>
 
 #include "include/client.h"
 #include "logger.h"
@@ -25,6 +26,14 @@ std::string GetLocalIPAddress() {
   return "";
 }
 
+// Helper: get current time in nanoseconds
+static inline int64_t NowNs() {
+  using Clock = std::chrono::steady_clock;
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(
+             Clock::now().time_since_epoch())
+      .count();
+}
+
 // PeerService implementation
 PeerService::PeerService(AudioClient* client) : client_(client) {
   LOG_DEBUG("PeerService initialized");
@@ -34,27 +43,14 @@ grpc::Status PeerService::Ping(grpc::ServerContext* context,
                                const client::PingRequest* request,
                                client::PingResponse* response) {
 
-  // Get current time
-  float t1 = static_cast<float>(
-      std::chrono::duration_cast<std::chrono::nanoseconds>(
-          std::chrono::steady_clock::now().time_since_epoch())
-          .count());
   // Set t1 current time
-  response->set_t1(t1);
-  // Simulate logic NOTE: no change
-  client_->GetPlayer();
-  if (!client_) {
-    LOG_ERROR("Client not initialized in PeerService");
-    return grpc::Status(grpc::StatusCode::INTERNAL, "Client not initialized");
-  }
+  const int64_t t1 = NowNs();
+  response->set_t1(static_cast<double>(t1)); 
 
-  // Get t2 current time
-  float t2 = static_cast<float>(
-      std::chrono::duration_cast<std::chrono::nanoseconds>(
-          std::chrono::steady_clock::now().time_since_epoch())
-          .count());
-  // Set t3 to current time
-  response->set_t2(t2);
+  // Set t2 current time
+  const int64_t t2 = NowNs();
+  response->set_t2(static_cast<double>(t2));
+  
                                 
   LOG_DEBUG("Received ping request from peer: {}", context->peer());
   return grpc::Status::OK;
@@ -116,17 +112,15 @@ grpc::Status PeerService::SendMusicCommand(grpc::ServerContext* context,
   client_->SetCommandFromBroadcast(true);
 
   // Adjust my local clock using average offset
-  float current_time = static_cast<float>(
-      std::chrono::duration_cast<std::chrono::nanoseconds>(
-          std::chrono::steady_clock::now().time_since_epoch())
-          .count());
-  float offset = client_->GetPeerNetwork()->GetAverageOffset();
-  float adjusted_time = current_time + offset;
+  const int64_t current_time = NowNs();
+  const int64_t offset       = client_->GetPeerNetwork()->GetAverageOffset();
+  const int64_t adjusted     = current_time + offset;  
 
   // Wait appropriate time
-  if (target_time > adjusted_time) {
-    std::this_thread::sleep_for(
-        std::chrono::nanoseconds(static_cast<int>(target_time - adjusted_time)));
+  const int64_t target = static_cast<int64_t>(request->target_time());
+  const int64_t wait   = target - adjusted;
+  if (wait > 0) {
+    std::this_thread::sleep_for(std::chrono::nanoseconds(wait));
   } else {
     LOG_WARN("Target time is in the past, skipping wait");
   }
@@ -314,7 +308,7 @@ std::vector<std::string> PeerNetwork::GetConnectedPeers() const {
   return peers;
 }
 
-float PeerNetwork::CalculateAverageOffset() const {
+int64_t PeerNetwork::CalculateAverageOffset() {
   std::lock_guard<std::mutex> lock(peers_mutex_);
 
   if (peer_stubs_.empty()) {
@@ -322,19 +316,14 @@ float PeerNetwork::CalculateAverageOffset() const {
     return 0.0f;
   }
 
-  float total_offset = 0;
-  float rtt = 0;
+  double total_offset = 0.0;
   for (const auto& entry : peer_stubs_) {
     client::PingRequest request;
     client::PingResponse response;
     grpc::ClientContext context;
 
     // Set t0 current time
-    float t0 = static_cast<float>(
-        std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::steady_clock::now().time_since_epoch())
-            .count());
-
+    const int64_t t0 = NowNs();
     auto status = entry.second->Ping(&context, request, &response);
 
     if (!status.ok()) {
@@ -344,25 +333,26 @@ float PeerNetwork::CalculateAverageOffset() const {
     }
 
     // Get t1, t2 from response
-    float t1 = response.t1();
-    float t2 = response.t2();
+    const int64_t t1 = static_cast<int64_t>(response.t1());
+    const int64_t t2 = static_cast<int64_t>(response.t2());
 
     // Set t3 current time
-    float t3 = static_cast<int>(
-        std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::steady_clock::now().time_since_epoch())
-            .count());
-    
+    const int64_t t3 = NowNs();
+
     // Calculate rtt and offset
-    float rtt = std::max(rtt, float((t3 - t0) - (t2 - t1)));
-    float offset = (t1 - t0 + t2 - t3) / 2;
+    const double offset = (double(t1 - t0) + double(t2 - t3)) / 2.0;
+    // float rtt = std::max(rtt, float((t3 - t0) - (t2 - t1)));
 
     total_offset += offset;
   }
 
   // assign peer network avg_offset to this
-  avg_offset_ = float(total_offset / peer_stubs_.size());
-  return avg_offset_;
+  // avg_offset_ = static_cast<int64_t>(total_offset / peer_stubs_.size());
+  avg_offset_.store(
+  static_cast<int64_t>(total_offset / peer_stubs_.size()),
+    std::memory_order_relaxed);
+  return avg_offset_.load(std::memory_order_relaxed);    
+  // return avg_offset_;
 }
 
 void PeerNetwork::BroadcastGossip() {
@@ -423,10 +413,8 @@ void PeerNetwork::BroadcastCommand(const std::string& action) {
   // Create the command request
   client::MusicRequest request;
   request.set_action(action);
-  float target_time = static_cast<float>(
-      std::chrono::duration_cast<std::chrono::nanoseconds>(
-          std::chrono::steady_clock::now().time_since_epoch())
-          .count()) + 2 * GetAverageOffset();
+  const int64_t target_time = NowNs() + 2 * GetAverageOffset();
+  request.set_target_time(static_cast<double>(target_time));
   
   // Send to all connected peers
   int success_count = 0;
@@ -471,9 +459,6 @@ void PeerNetwork::BroadcastCommand(const std::string& action) {
            target_time);
 
   // Sleep until target time arrives
-  std::this_thread::sleep_for(std::chrono::nanoseconds(
-      static_cast<int>(target_time -
-                       std::chrono::duration_cast<std::chrono::nanoseconds>(
-                           std::chrono::steady_clock::now().time_since_epoch())
-                           .count())));
+  const int64_t wait = target_time - NowNs();
+  if (wait > 0) std::this_thread::sleep_for(std::chrono::nanoseconds(wait));
 }
