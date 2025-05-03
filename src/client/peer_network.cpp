@@ -101,6 +101,20 @@ grpc::Status PeerService::SendMusicCommand(grpc::ServerContext* context,
   int position = request->position();
   int64_t wait_ms = request->wait_time_ms();
 
+  // Handle load actions immediately
+  if (action == "load") {
+    int song_num = request->song_num();
+    LOG_INFO("Received load command from peer {}: song_num={}", context->peer(),
+             song_num);
+    client_->SetCommandFromBroadcast(true);
+    bool ok = client_->LoadAudio(song_num);
+    client_->SetCommandFromBroadcast(false);
+    if (!ok) {
+      return grpc::Status(grpc::StatusCode::INTERNAL, "LoadAudio failed");
+    }
+    return grpc::Status::OK;
+  }
+
   LOG_INFO(
       "Received music command from peer {}: action={}, position={}, wait_ms={}",
       context->peer(), action, position, wait_ms);
@@ -415,6 +429,42 @@ void PeerNetwork::BroadcastGossip() {
   CalculateAverageOffset();
 }
 
+bool PeerNetwork::BroadcastLoad(int song_num) {
+  std::vector<std::string> peers;
+  {
+    std::lock_guard<std::mutex> lock(peers_mutex_);
+    for (auto& entry : peer_stubs_) peers.push_back(entry.first);
+  }
+  if (peers.empty()) {
+    LOG_DEBUG("No peers to broadcast load to");
+    return true;
+  }
+  int success = 0;
+  for (auto& peer : peers) {
+    client::MusicRequest req;
+    req.set_action("load");
+    req.set_song_num(song_num);
+    grpc::ClientContext ctx;
+    ctx.set_deadline(std::chrono::system_clock::now() +
+                     std::chrono::seconds(5));
+    client::MusicResponse resp;
+    std::lock_guard<std::mutex> lock(peers_mutex_);
+    auto it = peer_stubs_.find(peer);
+    if (it == peer_stubs_.end()) {
+      LOG_WARN("Peer {} disconnected before load", peer);
+      continue;
+    }
+    auto status = it->second->SendMusicCommand(&ctx, req, &resp);
+    if (!status.ok()) {
+      LOG_ERROR("Failed load to {}: {}", peer, status.error_message());
+    } else {
+      success++;
+    }
+  }
+  LOG_INFO("Load broadcast complete: {}/{} peers", success, peers.size());
+  return success == static_cast<int>(peers.size());
+}
+
 void PeerNetwork::BroadcastCommand(const std::string& action, int position) {
   // First, recalculate network timing to ensure we have fresh data
   CalculateAverageOffset();
@@ -439,10 +489,12 @@ void PeerNetwork::BroadcastCommand(const std::string& action, int position) {
 
   // Add a safety margin to account for timing jitter (1ms)
   float safety_margin_ns = 1000000.0f;
-  TimePointNs target_time_ns = sync_clock_.CalculateTargetExecutionTime(safety_margin_ns);
+  TimePointNs target_time_ns =
+      sync_clock_.CalculateTargetExecutionTime(safety_margin_ns);
   // Compute relative wait time in milliseconds
   TimePointNs now_ns = SyncClock::GetCurrentTimeNs();
-  int64_t wait_ms = target_time_ns > now_ns ? (target_time_ns - now_ns) / 1000000 : 0;
+  int64_t wait_ms =
+      target_time_ns > now_ns ? (target_time_ns - now_ns) / 1000000 : 0;
 
   // Dispatch non-blocking RPCs to all peers
   for (const auto& peer_address : peer_list) {
@@ -471,7 +523,8 @@ void PeerNetwork::BroadcastCommand(const std::string& action, int position) {
       }
     }).detach();
   }
-  LOG_INFO("Dispatched command '{}' to {} peers, wait_ms={}", action, peer_list.size(), wait_ms);
+  LOG_INFO("Dispatched command '{}' to {} peers, wait_ms={}", action,
+           peer_list.size(), wait_ms);
   // Sleep locally for the same delay
   std::this_thread::sleep_for(std::chrono::milliseconds(wait_ms));
 }

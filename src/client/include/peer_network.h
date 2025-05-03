@@ -79,6 +79,9 @@ class PeerNetwork {
   // Broadcast gossip to all connected peers
   void BroadcastGossip();
 
+  // Broadcast a load command synchronously and wait for all peers to load
+  bool BroadcastLoad(int song_num);
+
   // Get the sync clock instance
   SyncClock& GetSyncClock() { return sync_clock_; }
   const SyncClock& GetSyncClock() const { return sync_clock_; }

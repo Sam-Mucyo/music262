@@ -71,6 +71,7 @@ class AudioClient {
   std::unique_ptr<audio_service::audio_service::Stub> stub_;
   AudioPlayer player_;
   std::vector<char> audio_data_;
+  int current_song_num_{-1};  // index of last loaded song
 
   // Peer synchronization
   std::shared_ptr<PeerNetwork> peer_network_;

@@ -14,7 +14,8 @@ AudioClient::AudioClient(std::shared_ptr<Channel> channel)
     : stub_(audio_service::audio_service::NewStub(channel)),
       player_(),
       peer_sync_enabled_(false),
-      command_from_broadcast_(false) {
+      command_from_broadcast_(false),
+      current_song_num_(-1) {
   LOG_DEBUG("AudioClient initialized");
 }
 
@@ -76,7 +77,8 @@ bool AudioClient::LoadAudio(int song_num) {
       LOG_ERROR("Failed to load audio data into player");
       return false;
     }
-
+    // Track loaded song for sync
+    current_song_num_ = song_num;
     return true;
   } else {
     LOG_ERROR("LoadAudio RPC failed: {}", status.error_message());
@@ -85,12 +87,17 @@ bool AudioClient::LoadAudio(int song_num) {
 }
 
 void AudioClient::Play() {
-  // Broadcast command to peers if enabled and not from broadcast
+  // Broadcast load then play to peers if sync-enabled
   if (peer_sync_enabled_ && !command_from_broadcast_ && peer_network_) {
+    if (current_song_num_ >= 0) {
+      LOG_DEBUG("Broadcasting load command to peers for song {}",
+                current_song_num_);
+      peer_network_->BroadcastLoad(current_song_num_);
+    } else {
+      LOG_WARN("No song loaded to broadcast load");
+    }
     LOG_DEBUG("Broadcasting play command to peers");
     peer_network_->BroadcastCommand("play", player_.get_position());
-    // BroadcastCommand now handles synchronization timing internally
-    // and will delay until the right time to play
   }
   player_.play();
 }
