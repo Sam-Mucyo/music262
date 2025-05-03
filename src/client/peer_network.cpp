@@ -117,10 +117,20 @@ grpc::Status PeerService::SendMusicCommand(grpc::ServerContext* context,
   client_->SetCommandFromBroadcast(true);
 
   // Adjust target time to local time using average offset
-  const int64_t new_target_time = target_time - client_->GetPeerNetwork()->GetAverageOffset();
-  LOG_INFO("Adjusted target time: {}", new_target_time);
+  LOG_INFO("Global target time: {}", target_time);
+  int64_t offset_time = client_->GetPeerNetwork()->GetAverageOffset();
+  LOG_INFO("Average offset: {}", offset_time);
+  const int64_t new_target_time = target_time - offset_time;
+  const int64_t new_target_time_plus = target_time + offset_time;
+  LOG_INFO("Local target time (adjusted minus): {}", new_target_time);
+  LOG_INFO("Local target time (adjusted plus): {}", new_target_time_plus);
   const int64_t sleep_time = new_target_time - NowNs();
+  const int64_t sleep_time_plus = new_target_time_plus - NowNs();
+  LOG_INFO("Sleeping for {} ns", sleep_time);
+  LOG_INFO("Sleeping for {} ns", sleep_time_plus);
+
   std::this_thread::sleep_for(std::chrono::nanoseconds(sleep_time));
+
 
   // Execute the requested action
   if (action == "play") {
@@ -457,11 +467,18 @@ void PeerNetwork::BroadcastCommand(const std::string& action) {
   }
 
   // Adjust target time to local time using average offset
+  LOG_INFO("Global target time: {}", target_time);
+  LOG_INFO("Average offset: {}", avg_offset_.load());
   const int64_t new_target_time = target_time - avg_offset_.load();
-  LOG_INFO("Adjusted target time: {}", new_target_time);
+  const int64_t new_target_time_plus = target_time + avg_offset_.load();
+  LOG_INFO("Local target time (adjusted minus): {}", new_target_time);
+  LOG_INFO("Local target time (adjusted plus): {}", new_target_time_plus);
 
   // sleep for
   const int64_t sleep_time = new_target_time - NowNs();
+  const int64_t sleep_time_plus = new_target_time_plus - NowNs();
+  LOG_INFO("Sleeping for {} ns", sleep_time);
+  LOG_INFO("Sleeping for {} ns", sleep_time_plus);
   std::this_thread::sleep_for(std::chrono::nanoseconds(sleep_time));
   
   LOG_INFO("Broadcast complete: successfully sent to {}/{} peers",
