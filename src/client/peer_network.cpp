@@ -50,7 +50,6 @@ grpc::Status PeerService::Ping(grpc::ServerContext* context,
   // Set t2 current time
   const int64_t t2 = NowNs();
   response->set_t2(static_cast<double>(t2));
-  
                                 
   LOG_DEBUG("Received ping request from peer: {}", context->peer());
   return grpc::Status::OK;
@@ -348,11 +347,14 @@ int64_t PeerNetwork::CalculateAverageOffset() {
     const int64_t t3 = NowNs();
 
     // Calculate rtt and offset
-    const double offset = (double(t1 - t0) + double(t2 - t3)) / 2.0;
+    // const double offset = (double(t1 - t0) + double(t2 - t3)) / 2.0;
     // float rtt = std::max(rtt, float((t3 - t0) - (t2 - t1)));
 
+    // New way to calculate offset
+    const double offset = double(t2);
+
     total_offset += offset;
-  }
+  } 
 
   // assign peer network avg_offset to this
   // avg_offset_ = static_cast<int64_t>(total_offset / peer_stubs_.size());
@@ -361,6 +363,12 @@ int64_t PeerNetwork::CalculateAverageOffset() {
     std::memory_order_relaxed);
   return avg_offset_.load(std::memory_order_relaxed);    
   // return avg_offset_;
+
+  // New way to calculate offset
+  avg_offset_.store(
+    static_cast<int64_t>((total_offset + NowNs()) / (peer_stubs_.size() + 1)),
+    std::memory_order_relaxed);
+  return avg_offset_.load(std::memory_order_relaxed);
 }
 
 void PeerNetwork::BroadcastGossip() {
