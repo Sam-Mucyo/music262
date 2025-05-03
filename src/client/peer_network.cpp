@@ -368,13 +368,36 @@ int64_t PeerNetwork::CalculateAverageOffset() {
 }
 
 void PeerNetwork::BroadcastGossip() {
+  // bugfix: make sure all clients are connected before broadcasting
+  // rebuild peer list: iter thru peer_stubs and ping - if fail, remove from list
   std::vector<std::string> peer_list;
   {
     std::lock_guard<std::mutex> lock(peers_mutex_);
     for (const auto& entry : peer_stubs_) {
+      client::PingRequest request;
+      client::PingResponse response;
+      grpc::ClientContext context;
+
+      // Set t0 current time
+      const int64_t t0 = NowNs();
+      auto status = entry.second->Ping(&context, request, &response);
+
+      if (!status.ok()) {
+        LOG_ERROR("Removing peer {}: {}", entry.first,
+                  status.error_message());
+        continue;
+      }
       peer_list.push_back(entry.first);
     }
   }
+
+  // std::vector<std::string> peer_list;
+  // {
+  //   std::lock_guard<std::mutex> lock(peers_mutex_);
+  //   for (const auto& entry : peer_stubs_) {
+  //     peer_list.push_back(entry.first);
+  //   }
+  // }
 
   // Add clients to list of addresses
   client::GossipRequest request;
@@ -384,6 +407,7 @@ void PeerNetwork::BroadcastGossip() {
   request.add_peer_list(GetLocalIPAddress() + ":" +
                    std::to_string(server_port_));
 
+  // Broadcast gossip to all connected peers                 
   for (const auto& peer : peer_list) {
     grpc::ClientContext context;
     client::GossipResponse response;
