@@ -116,13 +116,13 @@ grpc::Status PeerService::SendMusicCommand(grpc::ServerContext* context,
   client_->SetCommandFromBroadcast(true);
 
   // Adjust target time to local time using average offset
-  LOG_INFO("Global target time: {}", target_time);
+  // LOG_INFO("Global target time: {}", target_time);
   int64_t offset_time = client_->GetPeerNetwork()->GetAverageOffset();
-  LOG_INFO("Average offset: {}", offset_time);
+  // LOG_INFO("Average offset: {}", offset_time);
   const int64_t new_target_time = target_time - offset_time;
-  LOG_INFO("Local target time (adjusted minus): {}", new_target_time);
+  // LOG_INFO("Local target time (adjusted minus): {}", new_target_time);
   const int64_t sleep_time = new_target_time - NowNs();
-  LOG_INFO("Sleeping for {} ns", sleep_time);
+  // LOG_INFO("Sleeping for {} ns", sleep_time);
 
   if (sleep_time > 0) {
     std::this_thread::sleep_for(std::chrono::nanoseconds(sleep_time));
@@ -426,7 +426,7 @@ void PeerNetwork::BroadcastCommand(const std::string& action) {
   // Create the command request
   client::MusicRequest request;
   request.set_action(action);
-  float target_time = NowNs() + GetAverageOffset() + 1e9;
+  float target_time = NowNs() + GetAverageOffset() + 3e9;
   request.set_target_time(static_cast<double>(target_time));
 
   // Send to all connected peers
@@ -447,7 +447,7 @@ void PeerNetwork::BroadcastCommand(const std::string& action) {
     client::MusicResponse response;
     grpc::ClientContext context;
     context.set_deadline(std::chrono::system_clock::now() +
-                         std::chrono::milliseconds(500));
+                         std::chrono::milliseconds(1000));
 
     LOG_DEBUG("Sending command '{}' to peer {}", action, peer_address);
 
@@ -472,14 +472,14 @@ void PeerNetwork::BroadcastCommand(const std::string& action) {
   }
 
   // Adjust target time to local time using average offset
-  LOG_INFO("Global target time: {}", target_time);
-  LOG_INFO("Average offset: {}", avg_offset_.load());
+  // LOG_INFO("Global target time: {}", target_time);
+  // LOG_INFO("Average offset: {}", avg_offset_.load());
   const int64_t new_target_time = target_time - avg_offset_.load();
-  LOG_INFO("Local target time (adjusted minus): {}", new_target_time);
+  // LOG_INFO("Local target time (adjusted minus): {}", new_target_time);
 
   // sleep for
   const int64_t sleep_time = new_target_time - NowNs();
-  LOG_INFO("Sleeping for {} ns", sleep_time);
+  // LOG_INFO("Sleeping for {} ns", sleep_time);
   if (sleep_time > 0) {
     std::this_thread::sleep_for(std::chrono::nanoseconds(sleep_time));
   }
