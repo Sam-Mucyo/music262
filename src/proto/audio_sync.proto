@@ -9,21 +9,45 @@ message GossipRequest {
 }
 
 // Messages for ping
-message PingRequest {}
+message PingRequest {
+  int64 sender_time = 1; // Timestamp from sender (t0)
+}
 message PingResponse {
-  int32 t1 = 1;
-  int32 t2 = 2;
+  int64 sender_time = 1; // Original timestamp from sender (t0)
+  int64 receiver_time_recv = 2; // Time received at receiver (t1)
+  int64 receiver_time_send = 3; // Time sent from receiver (t2)
 }
 
 // Messages for music control
-message MusicRequest {
-  string action = 1;       // "play", "pause", "resume", "stop"
-  float wall_clock = 2;    // wall clock time of action
-  float wait_time = 3;     // wait time in milliseconds
+message MusicCommand {
+  enum Action {
+    PLAY = 0;
+    PAUSE = 1;
+    RESUME = 2;
+    STOP = 3;
+  }
+  Action action = 1;
+  int64 wall_clock = 2;    // wall clock time in microseconds
+  int64 wait_time = 3;     // wait time in microseconds
   int32 position = 4;      // position of song
+  string song_name = 5;    // optional song name for PLAY
+  int32 command_id = 6;    // unique command identifier
 }
 
-message MusicResponse {}
+// Stream command status
+message CommandStatus {
+  int32 command_id = 1;
+  bool success = 2;
+  int64 execution_time = 3; // Time when command was executed
+  string error_message = 4; // Optional error message
+}
+
+// Network status for adaptive timeouts
+message NetworkStatus {
+  int64 rtt = 1; // Round-trip time in microseconds
+  int64 clock_offset = 2; // Clock offset in microseconds
+  string peer_address = 3; // Peer address
+}
 
 // Messages for querying position
 message GetPositionRequest {}
@@ -33,8 +57,15 @@ message GetPositionResponse {
 
 // Define the service
 service ClientHandler {
+  // Bidirectional streaming for peer communication
+  rpc StreamCommands(stream MusicCommand) returns (stream CommandStatus);
+  
+  // Network monitoring stream
+  rpc MonitorNetwork(stream NetworkStatus) returns (stream NetworkStatus);
+  
+  // Keep legacy methods for backward compatibility
   rpc Gossip(GossipRequest) returns (GossipResponse);
   rpc Ping(PingRequest) returns (PingResponse);
-  rpc SendMusicCommand(MusicRequest) returns (MusicResponse);
+  rpc SendMusicCommand(MusicCommand) returns (CommandStatus);
   rpc GetPosition(GetPositionRequest) returns (GetPositionResponse);
 }

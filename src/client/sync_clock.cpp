@@ -14,8 +14,8 @@ SyncClock::SyncClock() : avg_offset_(0.0f), max_rtt_(0.0f) {
 std::pair<float, float> SyncClock::ProcessPingResponse(
     TimePointNs t0, TimePointNs t3, const client::PingResponse& response) {
   // Get t1, t2 from response (times at the server)
-  TimePointNs t1 = response.t1();
-  TimePointNs t2 = response.t2();
+  TimePointNs t1 = response.receiver_time_recv();
+  TimePointNs t2 = response.receiver_time_send();
 
   // Calculate round-trip time: (t3-t0) - (t2-t1)
   // Total time - server processing time

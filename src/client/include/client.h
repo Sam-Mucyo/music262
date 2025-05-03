@@ -30,16 +30,16 @@ class AudioClient {
   bool LoadAudio(int song_num);
 
   // Play the currently loaded audio
-  void Play();
+  void Play(int position = 0, bool broadcast = true);
 
   // Pause the currently playing audio
-  void Pause();
+  void Pause(bool broadcast = true);
 
   // Resume the paused audio
-  void Resume();
+  void Resume(bool broadcast = true);
 
   // Stop the currently playing audio
-  void Stop();
+  void Stop(bool broadcast = true);
 
   // Get the current playback position
   unsigned int GetPosition() const;
@@ -51,7 +51,7 @@ class AudioClient {
   AudioPlayer& GetPlayer() { return player_; }
 
   // Get reference to the peer network
-  std::shared_ptr<PeerNetwork> GetPeerNetwork() { return peer_network_; }
+  PeerNetwork& GetPeerNetwork() { return *peer_network_; }
 
   // Get reference to the audio player's audio data
   std::vector<char>& GetAudioData() { return audio_data_; }
@@ -63,9 +63,8 @@ class AudioClient {
   // Set the peer network for command broadcasting
   void SetPeerNetwork(std::shared_ptr<PeerNetwork> peer_network);
 
-  // Flag to prevent broadcast loops
-  void SetCommandFromBroadcast(bool value) { command_from_broadcast_ = value; }
-  bool IsCommandFromBroadcast() const { return command_from_broadcast_; }
+  // Process peer list received from gossip
+  void ProcessPeerList(const std::vector<std::string>& peers);
 
  private:
   std::unique_ptr<audio_service::audio_service::Stub> stub_;
@@ -75,5 +74,4 @@ class AudioClient {
   // Peer synchronization
   std::shared_ptr<PeerNetwork> peer_network_;
   std::atomic<bool> peer_sync_enabled_{false};
-  std::atomic<bool> command_from_broadcast_{false};
 };

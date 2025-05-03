@@ -13,8 +13,7 @@ using audio_service::PlaylistResponse;
 AudioClient::AudioClient(std::shared_ptr<Channel> channel)
     : stub_(audio_service::audio_service::NewStub(channel)),
       player_(),
-      peer_sync_enabled_(false),
-      command_from_broadcast_(false) {
+      peer_sync_enabled_(false) {
   LOG_DEBUG("AudioClient initialized");
 }
 
@@ -84,44 +83,52 @@ bool AudioClient::LoadAudio(int song_num) {
   }
 }
 
-void AudioClient::Play() {
-  // Broadcast command to peers if enabled and not from broadcast
-  if (peer_sync_enabled_ && !command_from_broadcast_ && peer_network_) {
+void AudioClient::Play(int position, bool broadcast) {
+  // Broadcast command to peers if enabled
+  if (peer_sync_enabled_ && broadcast && peer_network_) {
     LOG_DEBUG("Broadcasting play command to peers");
-    peer_network_->BroadcastCommand("play", player_.get_position());
+    peer_network_->BroadcastCommand("play", position);
     // BroadcastCommand now handles synchronization timing internally
     // and will delay until the right time to play
   }
+
+  // Always play locally
   player_.play();
 }
 
-void AudioClient::Pause() {
-  // Broadcast command to peers if enabled and not from broadcast
-  if (peer_sync_enabled_ && !command_from_broadcast_ && peer_network_) {
+void AudioClient::Pause(bool broadcast) {
+  // Broadcast command to peers if enabled
+  if (peer_sync_enabled_ && broadcast && peer_network_) {
     LOG_DEBUG("Broadcasting pause command to peers");
     peer_network_->BroadcastCommand("pause", player_.get_position());
     // BroadcastCommand now handles synchronization timing internally
   }
+
+  // Always pause locally
   player_.pause();
 }
 
-void AudioClient::Resume() {
-  // Broadcast command to peers if enabled and not from broadcast
-  if (peer_sync_enabled_ && !command_from_broadcast_ && peer_network_) {
+void AudioClient::Resume(bool broadcast) {
+  // Broadcast command to peers if enabled
+  if (peer_sync_enabled_ && broadcast && peer_network_) {
     LOG_DEBUG("Broadcasting resume command to peers");
     peer_network_->BroadcastCommand("resume", player_.get_position());
     // BroadcastCommand now handles synchronization timing internally
   }
+
+  // Always resume locally
   player_.resume();
 }
 
-void AudioClient::Stop() {
-  // Broadcast command to peers if enabled and not from broadcast
-  if (peer_sync_enabled_ && !command_from_broadcast_ && peer_network_) {
+void AudioClient::Stop(bool broadcast) {
+  // Broadcast command to peers if enabled
+  if (peer_sync_enabled_ && broadcast && peer_network_) {
     LOG_DEBUG("Broadcasting stop command to peers");
     peer_network_->BroadcastCommand("stop", 0);
     // BroadcastCommand now handles synchronization timing internally
   }
+
+  // Always stop locally
   player_.stop();
 }
 
@@ -157,4 +164,31 @@ void AudioClient::EnablePeerSync(bool enable) {
 void AudioClient::SetPeerNetwork(std::shared_ptr<PeerNetwork> peer_network) {
   peer_network_ = peer_network;
   LOG_DEBUG("Peer network set");
+}
+
+void AudioClient::ProcessPeerList(const std::vector<std::string>& peers) {
+  if (!peer_network_) {
+    LOG_WARN("Cannot process peer list: peer network not initialized");
+    return;
+  }
+
+  LOG_INFO("Processing peer list with {} entries", peers.size());
+
+  // Get our current peer list
+  std::vector<std::string> current_peers = peer_network_->GetConnectedPeers();
+
+  // Connect to new peers
+  for (const auto& peer : peers) {
+    // Skip connecting to ourselves
+    if (peer == "localhost:" + std::to_string(peer_network_->GetServerPort())) {
+      continue;
+    }
+
+    // Check if we already know this peer
+    if (std::find(current_peers.begin(), current_peers.end(), peer) ==
+        current_peers.end()) {
+      LOG_INFO("Connecting to new peer: {}", peer);
+      peer_network_->ConnectToPeer(peer);
+    }
+  }
 }

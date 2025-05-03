@@ -39,8 +39,8 @@ TEST_F(SyncClockTest, ProcessPingResponse) {
   TimePointNs t3 = 1000030000;  // 1 second + 30000 ns
 
   // Set t1 and t2 in the response
-  response.set_t1(t1);
-  response.set_t2(t2);
+  response.set_receiver_time_recv(t1);
+  response.set_receiver_time_send(t2);
 
   // Process the response
   auto [offset, rtt] = sync_clock_->ProcessPingResponse(t0, t3, response);

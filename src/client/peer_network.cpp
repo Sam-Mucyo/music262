@@ -1,50 +1,243 @@
 #include "include/peer_network.h"
 
-#include <ifaddrs.h>
-
 #include <chrono>
+#include <future>
+#include <sstream>
+#include <thread>
 
+#include "../common/include/logger.h"
 #include "include/client.h"
-#include "logger.h"
 
-// Helper: get first non-loopback IPv4 address
-std::string GetLocalIPAddress() {
-  struct ifaddrs* ifas = nullptr;
-  if (getifaddrs(&ifas) == -1) return "";
-  for (auto* ifa = ifas; ifa; ifa = ifa->ifa_next) {
-    if (!ifa->ifa_addr || ifa->ifa_addr->sa_family != AF_INET) continue;
-    std::string name(ifa->ifa_name);
-    if (name == "lo0") continue;
-    auto* addr = (struct sockaddr_in*)ifa->ifa_addr;
-    char buf[INET_ADDRSTRLEN];
-    if (inet_ntop(AF_INET, &addr->sin_addr, buf, sizeof(buf))) {
-      freeifaddrs(ifas);
-      return std::string(buf);
+// ============================================================================
+// PeerStreamState implementation
+// ============================================================================
+
+PeerStreamState::PeerStreamState(const std::string& peer_address)
+    : peer_address_(peer_address), stream_active_(false) {}
+
+PeerStreamState::~PeerStreamState() { CloseStream(); }
+
+bool PeerStreamState::InitializeStream(
+    std::shared_ptr<client::ClientHandler::Stub> stub) {
+  if (stream_active_) {
+    CloseStream();
+  }
+
+  stub_ = stub;
+  context_ = std::make_unique<grpc::ClientContext>();
+
+  // Set indefinite timeout for the bidirectional stream
+  context_->set_deadline(std::chrono::system_clock::now() +
+                         std::chrono::hours(24));
+
+  // Create the bidirectional stream
+  stream_ = stub_->StreamCommands(context_.get());
+  if (!stream_) {
+    LOG_ERROR("Failed to create command stream to peer {}", peer_address_);
+    return false;
+  }
+
+  stream_active_ = true;
+
+  // Start response processing thread
+  response_thread_ = std::thread(&PeerStreamState::ProcessResponses, this);
+
+  LOG_INFO("Established command stream with peer {}", peer_address_);
+  return true;
+}
+
+void PeerStreamState::CloseStream() {
+  if (stream_active_) {
+    stream_active_ = false;
+
+    // Wait for response thread to finish
+    if (response_thread_.joinable()) {
+      response_thread_.join();
+    }
+
+    stream_.reset();
+    context_.reset();
+    LOG_INFO("Closed command stream with peer {}", peer_address_);
+  }
+}
+
+bool PeerStreamState::SendCommand(const client::MusicCommand& command) {
+  if (!stream_active_ || !stream_) {
+    LOG_ERROR("Cannot send command to peer {}: stream not active",
+              peer_address_);
+    return false;
+  }
+
+  bool success = stream_->Write(command);
+  if (!success) {
+    LOG_ERROR("Failed to send command to peer {}, closing stream",
+              peer_address_);
+    CloseStream();
+    return false;
+  }
+
+  LOG_DEBUG("Sent command {} to peer {}", command.command_id(), peer_address_);
+  return true;
+}
+
+void PeerStreamState::ProcessResponses() {
+  client::CommandStatus status;
+
+  while (stream_active_ && stream_->Read(&status)) {
+    LOG_DEBUG("Received command status from peer {}: command_id={}, success={}",
+              peer_address_, status.command_id(), status.success());
+
+    if (!status.success()) {
+      LOG_WARN("Command {} failed at peer {}: {}", status.command_id(),
+               peer_address_, status.error_message());
     }
   }
-  freeifaddrs(ifas);
-  return "";
+
+  // Stream closed or error occurred
+  stream_active_ = false;
+  LOG_INFO("Command stream from peer {} closed", peer_address_);
 }
 
-// PeerService implementation
-PeerService::PeerService(AudioClient* client) : client_(client) {
-  LOG_DEBUG("PeerService initialized");
+// ============================================================================
+// NetworkMonitor implementation
+// ============================================================================
+
+NetworkMonitor::NetworkMonitor(SyncClock& sync_clock)
+    : sync_clock_(sync_clock), running_(false) {}
+
+NetworkMonitor::~NetworkMonitor() { Stop(); }
+
+void NetworkMonitor::Start() {
+  if (running_) return;
+
+  running_ = true;
+  monitor_thread_ = std::thread(&NetworkMonitor::MonitorThread, this);
+  LOG_INFO("Network monitoring thread started");
 }
+
+void NetworkMonitor::Stop() {
+  if (!running_) return;
+
+  running_ = false;
+  if (monitor_thread_.joinable()) {
+    monitor_thread_.join();
+  }
+  LOG_INFO("Network monitoring thread stopped");
+}
+
+void NetworkMonitor::AddPeer(
+    const std::string& peer_address,
+    std::shared_ptr<client::ClientHandler::Stub> stub) {
+  std::lock_guard<std::mutex> lock(peers_mutex_);
+  monitored_peers_[peer_address] = stub;
+  LOG_INFO("Added peer {} to network monitor", peer_address);
+}
+
+void NetworkMonitor::RemovePeer(const std::string& peer_address) {
+  std::lock_guard<std::mutex> lock(peers_mutex_);
+  monitored_peers_.erase(peer_address);
+  LOG_INFO("Removed peer {} from network monitor", peer_address);
+}
+
+void NetworkMonitor::MonitorThread() {
+  while (running_) {
+    // Copy peers to avoid holding the lock during RPC calls
+    std::map<std::string, std::shared_ptr<client::ClientHandler::Stub>>
+        peers_copy;
+    {
+      std::lock_guard<std::mutex> lock(peers_mutex_);
+      peers_copy = monitored_peers_;
+    }
+
+    // Perform offset calculation for each peer
+    std::vector<float> offsets;
+    float max_rtt = 0.0f;
+
+    for (const auto& [peer_address, stub] : peers_copy) {
+      CalculatePeerOffset(peer_address, stub);
+    }
+
+    // Sleep until next recalculation
+    std::this_thread::sleep_for(
+        std::chrono::milliseconds(recalculation_interval_ms_));
+  }
+}
+
+void NetworkMonitor::CalculatePeerOffset(
+    const std::string& peer_address,
+    std::shared_ptr<client::ClientHandler::Stub> stub) {
+  // Collect multiple ping measurements for accuracy
+  constexpr int ping_count = 5;
+  std::vector<float> offsets;
+  float max_rtt = 0.0f;
+
+  for (int i = 0; i < ping_count; ++i) {
+    // Create request and context
+    client::PingRequest request;
+    client::PingResponse response;
+    grpc::ClientContext context;
+
+    // Set a reasonable deadline for ping
+    context.set_deadline(std::chrono::system_clock::now() +
+                         std::chrono::seconds(1));
+
+    // Get start time (t0)
+    TimePointNs t0 = SyncClock::GetCurrentTimeNs();
+    request.set_sender_time(t0);
+
+    // Send ping
+    auto status = stub->Ping(&context, request, &response);
+
+    // Get end time (t3)
+    TimePointNs t3 = SyncClock::GetCurrentTimeNs();
+
+    if (!status.ok()) {
+      LOG_WARN("Ping to peer {} failed: {}", peer_address,
+               status.error_message());
+      continue;
+    }
+
+    // Process ping response
+    auto [offset, rtt] = sync_clock_.ProcessPingResponse(t0, t3, response);
+    offsets.push_back(offset);
+    max_rtt = std::max(max_rtt, rtt);
+
+    // Brief pause between pings
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+
+  if (!offsets.empty()) {
+    // Calculate average offset
+    float avg_offset = sync_clock_.CalculateAverageOffset(offsets);
+
+    // Update SyncClock with latest measurements
+    sync_clock_.SetAverageOffset(avg_offset);
+    sync_clock_.SetMaxRtt(max_rtt);
+
+    LOG_DEBUG("Updated clock offset for peer {}: offset={} ns, max_rtt={} ns",
+              peer_address, avg_offset, max_rtt);
+  }
+}
+
+// ============================================================================
+// PeerService implementation
+// ============================================================================
+
+PeerService::PeerService(AudioClient* client) : client_(client) {}
 
 grpc::Status PeerService::Ping(grpc::ServerContext* context,
                                const client::PingRequest* request,
                                client::PingResponse* response) {
-  LOG_DEBUG("Received ping request from peer: {}", context->peer());
+  // Get time when received (t1)
+  TimePointNs t1 = SyncClock::GetCurrentTimeNs();
 
-  // Set t1 to current time when received
-  auto t1 = SyncClock::GetCurrentTimeNs();
+  // Get time before sending (t2)
+  TimePointNs t2 = SyncClock::GetCurrentTimeNs();
 
-  // Set t2 to current time when about to respond
-  auto t2 = SyncClock::GetCurrentTimeNs();
-
-  // Set values in response
-  response->set_t1(t1);
-  response->set_t2(t2);
+  // Fill response with timestamps
+  response->set_sender_time(request->sender_time());
+  response->set_receiver_time_recv(t1);
+  response->set_receiver_time_send(t2);
 
   return grpc::Status::OK;
 }
@@ -52,230 +245,337 @@ grpc::Status PeerService::Ping(grpc::ServerContext* context,
 grpc::Status PeerService::Gossip(grpc::ServerContext* context,
                                  const client::GossipRequest* request,
                                  client::GossipResponse* response) {
-  LOG_INFO("Received GossipRequest from peer: {}", context->peer());
-
-  if (!client_) {
-    LOG_ERROR("Client not initialized in PeerService");
-    return grpc::Status(grpc::StatusCode::INTERNAL, "Client not initialized");
+  // Process peer list from request
+  std::vector<std::string> peer_addresses;
+  for (int i = 0; i < request->peer_list_size(); ++i) {
+    peer_addresses.push_back(request->peer_list(i));
   }
 
-  std::shared_ptr<PeerNetwork> network_ptr = client_->GetPeerNetwork();
-  if (!network_ptr) {
-    LOG_ERROR("Peer network not available");
-    return grpc::Status(grpc::StatusCode::INTERNAL,
-                        "Peer network not available");
-  }
-  // use raw pointer or keep using shared_ptr directly
-  PeerNetwork* network = network_ptr.get();
-  if (!network) {
-    LOG_ERROR("Peer network not available");
-    return grpc::Status(grpc::StatusCode::INTERNAL,
-                        "Peer network not available");
-  }
+  // Forward to client for processing
+  client_->ProcessPeerList(peer_addresses);
 
-  // Clear and reconnect
-  network->DisconnectFromAllPeers();
-  for (const auto& addr : request->peer_list()) {
-    // Skip itself
-    if (addr ==
-        GetLocalIPAddress() + ":" + std::to_string(network->GetServerPort())) {
-      continue;
-    }
-    network->ConnectToPeer(addr);
-  }
-
-  // Calculate average offset for future use
-  // network->SetAverageOffset(CalculateAverageOffset());
   return grpc::Status::OK;
 }
 
 grpc::Status PeerService::SendMusicCommand(grpc::ServerContext* context,
-                                           const client::MusicRequest* request,
-                                           client::MusicResponse* response) {
-  if (!client_) {
-    LOG_ERROR("Client not initialized in PeerService");
-    return grpc::Status(grpc::StatusCode::INTERNAL, "Client not initialized");
+                                           const client::MusicCommand* request,
+                                           client::CommandStatus* response) {
+  int action = static_cast<int>(request->action());
+  LOG_INFO("Received command: {} with position {}", action,
+           request->position());
+
+  response->set_command_id(request->command_id());
+
+  // Calculate target time from wall_clock
+  TimePointNs target_time_ns = request->wall_clock();
+
+  // Calculate local adjusted time based on our clock offset
+  auto& sync_clock = client_->GetPeerNetwork().GetSyncClock();
+  TimePointNs adjusted_time = SyncClock::AdjustTargetTime(
+      target_time_ns, sync_clock.GetAverageOffset());
+
+  // Calculate how long to wait
+  TimePointNs now = SyncClock::GetCurrentTimeNs();
+
+  // If target time is in the future, sleep until then
+  if (adjusted_time > now) {
+    SyncClock::SleepUntil(adjusted_time);
   }
 
-  const std::string& action = request->action();
-  int position = request->position();
-  float wall_clock_ns = request->wall_clock();
+  // Record execution time
+  TimePointNs execution_time = SyncClock::GetCurrentTimeNs();
+  response->set_execution_time(execution_time);
 
-  LOG_INFO(
-      "Received music command from peer {}: action={}, position={}, "
-      "target_time={}",
-      context->peer(), action, position, static_cast<int64_t>(wall_clock_ns));
+  bool success = false;
 
-  // Mark that this command came from a broadcast to prevent echo
-  client_->SetCommandFromBroadcast(true);
+  // Execute the command on our local player
+  try {
+    switch (request->action()) {
+      case client::MusicCommand::PLAY:
+        client_->Play(request->position(), false);
+        break;
+      case client::MusicCommand::PAUSE:
+        client_->Pause(false);
+        break;
+      case client::MusicCommand::RESUME:
+        client_->Resume(false);
+        break;
+      case client::MusicCommand::STOP:
+        client_->Stop(false);
+        break;
+      default:
+        LOG_ERROR("Unknown command action: {}", action);
+        response->set_success(false);
+        response->set_error_message("Unknown command action");
+        return grpc::Status::OK;
+    }
 
-  // Get a reference to the peer network for clock adjustment
-  std::shared_ptr<PeerNetwork> network_ptr = client_->GetPeerNetwork();
-  if (!network_ptr) {
-    LOG_ERROR("Peer network not available");
-    client_->SetCommandFromBroadcast(false);
-    return grpc::Status(grpc::StatusCode::INTERNAL,
-                        "Peer network not available");
+    success = true;
+  } catch (const std::exception& e) {
+    LOG_ERROR("Exception during command execution: {}", e.what());
+    response->set_success(false);
+    response->set_error_message(e.what());
+    return grpc::Status::OK;
   }
 
-  // Get the SyncClock from the network
-  const SyncClock& sync_clock = network_ptr->GetSyncClock();
+  response->set_success(success);
 
-  // Get clock offset from network
-  float clock_offset = sync_clock.GetAverageOffset();
+  // Log timing information
+  int64_t delay = execution_time - target_time_ns;
+  LOG_DEBUG("Command {} executed with {}ns delay from target",
+            request->command_id(), delay);
 
-  // Calculate the target execution time
-  // If time is in the future, wait until it's time to execute
-  // If time is in the past, execute immediately
-  TimePointNs target_time_ns = static_cast<TimePointNs>(wall_clock_ns);
-
-  // Adjust the target time based on our clock offset
-  TimePointNs adjusted_time_ns =
-      SyncClock::AdjustTargetTime(target_time_ns, clock_offset);
-
-  // Wait until the target time (if in the future)
-  TimePointNs current_time_ns = SyncClock::GetCurrentTimeNs();
-
-  if (adjusted_time_ns > current_time_ns) {
-    LOG_DEBUG("Waiting until target time: {} (current time: {})",
-              adjusted_time_ns, current_time_ns);
-
-    // Sleep until the target time
-    SyncClock::SleepUntil(adjusted_time_ns);
-  } else {
-    LOG_DEBUG("Target time already passed, executing immediately");
-  }
-
-  // Execute the requested action
-  if (action == "play") {
-    client_->Play();
-  } else if (action == "pause") {
-    client_->Pause();
-  } else if (action == "resume") {
-    client_->Resume();
-  } else if (action == "stop") {
-    client_->Stop();
-  } else {
-    LOG_WARN("Unknown command from peer: {}", action);
-  }
-
-  // Reset the broadcast flag
-  client_->SetCommandFromBroadcast(false);
-
-  LOG_DEBUG("Music command executed successfully: {}", action);
   return grpc::Status::OK;
 }
 
 grpc::Status PeerService::GetPosition(grpc::ServerContext* context,
                                       const client::GetPositionRequest* request,
                                       client::GetPositionResponse* response) {
-  if (!client_) {
-    LOG_ERROR("Client not initialized in PeerService");
-    return grpc::Status(grpc::StatusCode::INTERNAL, "Client not initialized");
-  }
-
-  unsigned int position = client_->GetPosition();
+  // Get current position from the client
+  int position = client_->GetPosition();
   response->set_position(position);
-
-  LOG_DEBUG("Position request from peer {}, current position: {}",
-            context->peer(), position);
-
   return grpc::Status::OK;
 }
 
+grpc::Status PeerService::StreamCommands(
+    grpc::ServerContext* context,
+    grpc::ServerReaderWriter<client::CommandStatus, client::MusicCommand>*
+        stream) {
+  LOG_INFO("Command stream established from peer {}", context->peer());
+
+  client::MusicCommand command;
+  while (stream->Read(&command)) {
+    int action = static_cast<int>(command.action());
+    LOG_DEBUG("Received streaming command: {} with id {}", action,
+              command.command_id());
+
+    client::CommandStatus status;
+    status.set_command_id(command.command_id());
+
+    // Calculate target time from wall_clock
+    TimePointNs target_time_ns = command.wall_clock();
+
+    // Calculate local adjusted time based on our clock offset
+    auto& sync_clock = client_->GetPeerNetwork().GetSyncClock();
+    TimePointNs adjusted_time = SyncClock::AdjustTargetTime(
+        target_time_ns, sync_clock.GetAverageOffset());
+
+    // Calculate how long to wait
+    TimePointNs now = SyncClock::GetCurrentTimeNs();
+
+    // If target time is in the future, sleep until then
+    if (adjusted_time > now) {
+      SyncClock::SleepUntil(adjusted_time);
+    }
+
+    // Record execution time
+    TimePointNs execution_time = SyncClock::GetCurrentTimeNs();
+    status.set_execution_time(execution_time);
+
+    bool success = false;
+
+    // Execute the command on our local player
+    try {
+      switch (command.action()) {
+        case client::MusicCommand::PLAY:
+          client_->Play(command.position(), false);
+          break;
+        case client::MusicCommand::PAUSE:
+          client_->Pause(false);
+          break;
+        case client::MusicCommand::RESUME:
+          client_->Resume(false);
+          break;
+        case client::MusicCommand::STOP:
+          client_->Stop(false);
+          break;
+        default:
+          LOG_ERROR("Unknown command action: {}", action);
+          status.set_success(false);
+          status.set_error_message("Unknown command action");
+          stream->Write(status);
+          continue;
+      }
+
+      success = true;
+    } catch (const std::exception& e) {
+      LOG_ERROR("Exception during command execution: {}", e.what());
+      status.set_success(false);
+      status.set_error_message(e.what());
+      stream->Write(status);
+      continue;
+    }
+
+    status.set_success(success);
+
+    // Log timing information
+    int64_t delay = execution_time - target_time_ns;
+    LOG_DEBUG("Command {} executed with {}ns delay from target",
+              command.command_id(), delay);
+
+    // Send status back to client
+    stream->Write(status);
+  }
+
+  LOG_INFO("Command stream closed from peer {}", context->peer());
+  return grpc::Status::OK;
+}
+
+grpc::Status PeerService::MonitorNetwork(
+    grpc::ServerContext* context,
+    grpc::ServerReaderWriter<client::NetworkStatus, client::NetworkStatus>*
+        stream) {
+  LOG_INFO("Network monitoring stream established from peer {}",
+           context->peer());
+
+  client::NetworkStatus status;
+  while (stream->Read(&status)) {
+    // Process network status from peer
+    LOG_DEBUG("Received network status from peer {}: rtt={}, offset={}",
+              status.peer_address(), status.rtt(), status.clock_offset());
+
+    // Send back our status
+    client::NetworkStatus our_status;
+    our_status.set_rtt(client_->GetPeerNetwork().GetSyncClock().GetMaxRtt());
+    our_status.set_clock_offset(
+        client_->GetPeerNetwork().GetSyncClock().GetAverageOffset());
+
+    // Convert port to string for peer_address
+    std::string port_str =
+        std::to_string(client_->GetPeerNetwork().GetServerPort());
+    our_status.set_peer_address("localhost:" + port_str);
+
+    if (!stream->Write(our_status)) {
+      LOG_ERROR("Failed to write network status to peer {}", context->peer());
+      break;
+    }
+  }
+
+  LOG_INFO("Network monitoring stream closed from peer {}", context->peer());
+  return grpc::Status::OK;
+}
+
+// ============================================================================
 // PeerNetwork implementation
+// ============================================================================
+
 PeerNetwork::PeerNetwork(AudioClient* client)
-    : client_(client), server_running_(false), server_port_(50052) {
-  LOG_DEBUG("PeerNetwork initialized");
+    : client_(client),
+      server_running_(false),
+      server_port_(0),
+      queue_running_(false),
+      next_command_id_(0) {
+  // Create a NetworkMonitor for background offset calculation
+  network_monitor_ = std::make_unique<NetworkMonitor>(sync_clock_);
 }
 
 PeerNetwork::~PeerNetwork() {
-  LOG_DEBUG("PeerNetwork shutting down");
+  // Stop async processing
+  queue_running_ = false;
+  queue_cv_.notify_all();
+  if (queue_thread_.joinable()) {
+    queue_thread_.join();
+  }
+
+  // Stop network monitor
+  network_monitor_->Stop();
+
+  // Stop server
   StopServer();
+
+  // Disconnect from all peers
   DisconnectFromAllPeers();
 }
 
 bool PeerNetwork::StartServer(int port) {
   if (server_running_) {
-    LOG_INFO("Peer server already running on port {}", server_port_);
-    return true;
-  }
-
-  server_port_ = port;
-
-  // Create service
-  service_ = std::make_unique<PeerService>(client_);
-
-  // Build and start server
-  std::string server_address = "0.0.0.0:" + std::to_string(port);
-  grpc::ServerBuilder builder;
-
-  builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
-  builder.RegisterService(service_.get());
-
-  LOG_INFO("Starting peer server on {}", server_address);
-  server_ = builder.BuildAndStart();
-  if (!server_) {
-    LOG_ERROR("Failed to start peer server on port {}", port);
+    LOG_WARN("Server already running on port {}", server_port_);
     return false;
   }
 
-  LOG_INFO("Peer server started successfully on {}", server_address);
+  // Create the server service
+  service_ = std::make_unique<PeerService>(client_);
 
-  // Start server thread
+  // Build the server
+  std::string server_address = "0.0.0.0:" + std::to_string(port);
+  grpc::ServerBuilder builder;
+  builder.AddListeningPort(server_address, grpc::InsecureServerCredentials(),
+                           &server_port_);
+  builder.RegisterService(service_.get());
+
+  // Start the server
+  server_ = builder.BuildAndStart();
+  if (!server_) {
+    LOG_ERROR("Failed to start server on port {}", port);
+    return false;
+  }
+
   server_running_ = true;
+  LOG_INFO("Server started on port {}", server_port_);
+
+  // Start the server thread
   server_thread_ = std::thread([this]() {
-    LOG_DEBUG("Peer server thread started");
+    LOG_INFO("Server thread started");
     server_->Wait();
-    LOG_DEBUG("Peer server thread exiting");
-    server_running_ = false;
+    LOG_INFO("Server thread stopped");
   });
+
+  // Start the command queue processing thread
+  queue_running_ = true;
+  queue_thread_ = std::thread(&PeerNetwork::ProcessCommandQueue, this);
+
+  // Start the network monitor
+  network_monitor_->Start();
 
   return true;
 }
 
 void PeerNetwork::StopServer() {
   if (!server_running_) {
-    LOG_DEBUG("Peer server not running, nothing to stop");
     return;
   }
 
-  LOG_INFO("Stopping peer server");
+  // Stop the server
   server_->Shutdown();
-
   if (server_thread_.joinable()) {
     server_thread_.join();
   }
 
   server_running_ = false;
-  LOG_INFO("Peer server stopped");
+  LOG_INFO("Server stopped");
 }
 
 bool PeerNetwork::ConnectToPeer(const std::string& peer_address) {
-  std::lock_guard<std::mutex> lock(peers_mutex_);
-
   // Check if already connected
-  if (peer_stubs_.find(peer_address) != peer_stubs_.end()) {
-    LOG_INFO("Already connected to peer: {}", peer_address);
-    return true;
+  {
+    std::lock_guard<std::mutex> lock(peers_mutex_);
+    if (peer_stubs_.find(peer_address) != peer_stubs_.end()) {
+      LOG_WARN("Already connected to peer {}", peer_address);
+      return true;
+    }
   }
 
-  LOG_INFO("Attempting to connect to peer: {}", peer_address);
-
-  // Create channel
+  // Create a channel and stub
   auto channel =
       grpc::CreateChannel(peer_address, grpc::InsecureChannelCredentials());
   auto stub = client::ClientHandler::NewStub(channel);
 
-  // Test connection with ping
-  client::PingRequest ping_request;
-  client::PingResponse ping_response;
+  if (!stub) {
+    LOG_ERROR("Failed to create stub for peer {}", peer_address);
+    return false;
+  }
+
+  // Test the connection with a ping
+  client::PingRequest request;
+  client::PingResponse response;
   grpc::ClientContext context;
   context.set_deadline(std::chrono::system_clock::now() +
                        std::chrono::seconds(5));
 
-  LOG_DEBUG("Sending ping to peer {}", peer_address);
-  auto status = stub->Ping(&context, ping_request, &ping_response);
+  TimePointNs t0 = SyncClock::GetCurrentTimeNs();
+  request.set_sender_time(t0);
+
+  auto status = stub->Ping(&context, request, &response);
 
   if (!status.ok()) {
     LOG_ERROR("Failed to connect to peer {}: {}", peer_address,
@@ -283,246 +583,180 @@ bool PeerNetwork::ConnectToPeer(const std::string& peer_address) {
     return false;
   }
 
-  // Store the connection
-  peer_stubs_[peer_address] = std::move(stub);
-  LOG_INFO("Successfully connected to peer: {}", peer_address);
+  TimePointNs t3 = SyncClock::GetCurrentTimeNs();
+
+  // Process ping response to calculate initial offset
+  auto [offset, rtt] = sync_clock_.ProcessPingResponse(t0, t3, response);
+  LOG_INFO("Connected to peer {}: offset={} ns, rtt={} ns", peer_address,
+           offset, rtt);
+
+  // Create a shared_ptr to the stub for thread safety
+  std::shared_ptr<client::ClientHandler::Stub> shared_stub = std::move(stub);
+
+  // Store the stub
+  {
+    std::lock_guard<std::mutex> lock(peers_mutex_);
+    peer_stubs_[peer_address] = shared_stub;
+  }
+
+  // Create a stream state for this peer
+  {
+    std::lock_guard<std::mutex> lock(streams_mutex_);
+    auto stream_state = std::make_unique<PeerStreamState>(peer_address);
+    if (stream_state->InitializeStream(shared_stub)) {
+      peer_streams_[peer_address] = std::move(stream_state);
+    }
+  }
+
+  // Add to network monitor
+  network_monitor_->AddPeer(peer_address, shared_stub);
 
   return true;
 }
 
 bool PeerNetwork::DisconnectFromPeer(const std::string& peer_address) {
-  std::lock_guard<std::mutex> lock(peers_mutex_);
-
-  auto it = peer_stubs_.find(peer_address);
-  if (it == peer_stubs_.end()) {
-    LOG_WARN("Cannot disconnect: not connected to peer {}", peer_address);
-    return false;
+  // Close the stream if it exists
+  {
+    std::lock_guard<std::mutex> lock(streams_mutex_);
+    auto it = peer_streams_.find(peer_address);
+    if (it != peer_streams_.end()) {
+      it->second->CloseStream();
+      peer_streams_.erase(it);
+    }
   }
 
-  peer_stubs_.erase(it);
-  LOG_INFO("Disconnected from peer: {}", peer_address);
+  // Remove from network monitor
+  network_monitor_->RemovePeer(peer_address);
 
-  return true;
+  // Remove the stub
+  {
+    std::lock_guard<std::mutex> lock(peers_mutex_);
+    return peer_stubs_.erase(peer_address) > 0;
+  }
 }
 
 void PeerNetwork::DisconnectFromAllPeers() {
-  std::lock_guard<std::mutex> lock(peers_mutex_);
+  // Get the list of peers
+  std::vector<std::string> peers = GetConnectedPeers();
 
-  size_t count = peer_stubs_.size();
-  if (count > 0) {
-    LOG_INFO("Disconnecting from {} peers", count);
-    peer_stubs_.clear();
-  } else {
-    LOG_DEBUG("No peers to disconnect from");
+  // Disconnect from each peer
+  for (const auto& peer : peers) {
+    DisconnectFromPeer(peer);
   }
 }
 
 std::vector<std::string> PeerNetwork::GetConnectedPeers() const {
-  std::lock_guard<std::mutex> lock(peers_mutex_);
+  std::vector<std::string> result;
 
-  std::vector<std::string> peers;
+  std::lock_guard<std::mutex> lock(peers_mutex_);
   for (const auto& entry : peer_stubs_) {
-    peers.push_back(entry.first);
+    result.push_back(entry.first);
   }
 
-  LOG_DEBUG("Retrieved list of {} connected peers", peers.size());
-  return peers;
+  return result;
 }
 
 float PeerNetwork::CalculateAverageOffset() const {
-  std::lock_guard<std::mutex> lock(peers_mutex_);
-
-  if (peer_stubs_.empty()) {
-    LOG_DEBUG("No peers connected, cannot calculate average offset");
-    return 0.0f;
-  }
-
-  std::vector<float> offsets;
-  float max_rtt = 0.0f;
-  int successful_pings = 0;
-
-  // Perform multiple pings to get more accurate measurements
-  const int NUM_PINGS = 5;
-
-  for (const auto& entry : peer_stubs_) {
-    std::vector<float> peer_offsets;
-    float peer_rtt = 0.0f;
-
-    for (int i = 0; i < NUM_PINGS; i++) {
-      client::PingRequest request;
-      client::PingResponse response;
-      grpc::ClientContext context;
-
-      // Set deadline for ping request
-      context.set_deadline(std::chrono::system_clock::now() +
-                           std::chrono::seconds(1));
-
-      // Set t0 (time at client before sending request)
-      TimePointNs t0 = SyncClock::GetCurrentTimeNs();
-
-      // Send ping request
-      auto status = entry.second->Ping(&context, request, &response);
-
-      if (!status.ok()) {
-        LOG_ERROR("Failed to get offset from peer {}: {}", entry.first,
-                  status.error_message());
-        break;
-      }
-
-      // Set t3 (time at client after receiving response)
-      TimePointNs t3 = SyncClock::GetCurrentTimeNs();
-
-      // Process the ping response using SyncClock
-      auto [current_offset, current_rtt] =
-          const_cast<SyncClock&>(sync_clock_)
-              .ProcessPingResponse(t0, t3, response);
-
-      LOG_DEBUG("Ping to {}: RTT={} ns, Offset={} ns", entry.first, current_rtt,
-                current_offset);
-
-      peer_offsets.push_back(current_offset);
-      peer_rtt = std::max(peer_rtt, current_rtt);
-    }
-
-    // Average the results from multiple pings to this peer
-    if (!peer_offsets.empty()) {
-      float peer_avg_offset =
-          std::accumulate(peer_offsets.begin(), peer_offsets.end(), 0.0f) /
-          peer_offsets.size();
-      offsets.push_back(peer_avg_offset);
-      max_rtt = std::max(max_rtt, peer_rtt);
-      successful_pings++;
-
-      LOG_INFO("Average offset from peer {}: {} ns, RTT: {} ns", entry.first,
-               peer_avg_offset, peer_rtt);
-    }
-  }
-
-  if (successful_pings == 0) {
-    LOG_WARN("No successful pings to calculate offset");
-    return 0.0f;
-  }
-
-  // Set the max RTT in the sync clock
-  const_cast<SyncClock&>(sync_clock_).SetMaxRtt(max_rtt);
-
-  // Calculate and store the average offset across all peers
-  float new_avg_offset =
-      const_cast<SyncClock&>(sync_clock_).CalculateAverageOffset(offsets);
-
-  LOG_INFO("Calculated network average offset: {} ns, max RTT: {} ns",
-           new_avg_offset, max_rtt);
-
-  return new_avg_offset;
-}
-
-void PeerNetwork::BroadcastGossip() {
-  std::vector<std::string> peer_list;
-  {
-    std::lock_guard<std::mutex> lock(peers_mutex_);
-    for (const auto& entry : peer_stubs_) {
-      peer_list.push_back(entry.first);
-    }
-  }
-
-  // Add clients to list of addresses
-  client::GossipRequest request;
-  for (const auto& peer : peer_list) {
-    request.add_peer_list(peer);
-  }
-  request.add_peer_list(GetLocalIPAddress() + ":" +
-                        std::to_string(server_port_));
-
-  for (const auto& peer : peer_list) {
-    grpc::ClientContext context;
-    client::GossipResponse response;
-
-    {
-      std::lock_guard<std::mutex> lock(peers_mutex_);
-      auto it = peer_stubs_.find(peer);
-      if (it == peer_stubs_.end()) continue;
-      auto status = it->second->Gossip(&context, request, &response);
-      if (!status.ok()) {
-        LOG_ERROR("Failed to send gossip to {}: {}", peer,
-                  status.error_message());
-      } else {
-        LOG_INFO("Sent gossip to {}", peer);
-      }
-    }
-  }
-  // Calculate average offset for future use
-  CalculateAverageOffset();
+  // This is now handled by the NetworkMonitor in the background
+  // This method is kept for backward compatibility
+  return sync_clock_.GetAverageOffset();
 }
 
 void PeerNetwork::BroadcastCommand(const std::string& action, int position) {
-  // First, recalculate network timing to ensure we have fresh data
-  CalculateAverageOffset();
+  // Get list of connected peers
+  std::vector<std::string> peer_list = GetConnectedPeers();
 
-  std::vector<std::string> peer_list;
-  {
-    std::lock_guard<std::mutex> lock(peers_mutex_);
-
-    if (peer_stubs_.empty()) {
-      LOG_DEBUG("No peers to broadcast command to");
-      return;
-    }
-
-    // Make a copy of peer addresses to avoid holding the mutex during RPC calls
-    for (const auto& entry : peer_stubs_) {
-      peer_list.push_back(entry.first);
-    }
+  if (peer_list.empty()) {
+    LOG_DEBUG("No peers to broadcast command to");
+    return;
   }
 
   LOG_INFO("Broadcasting command '{}' with position {} to {} peers", action,
            position, peer_list.size());
 
-  // Calculate target execution time using SyncClock
+  // Calculate target execution time
   // Add a safety margin to account for processing time (1ms)
   float safety_margin_ns = 1000000.0f;
   TimePointNs target_time_ns =
       sync_clock_.CalculateTargetExecutionTime(safety_margin_ns);
 
-  // Send to all connected peers
+  // Create the command
+  client::MusicCommand command;
+
+  // Set the action enum value (rather than string)
+  if (action == "play") {
+    command.set_action(client::MusicCommand::PLAY);
+  } else if (action == "pause") {
+    command.set_action(client::MusicCommand::PAUSE);
+  } else if (action == "resume") {
+    command.set_action(client::MusicCommand::RESUME);
+  } else if (action == "stop") {
+    command.set_action(client::MusicCommand::STOP);
+  } else {
+    LOG_ERROR("Unknown action: {}", action);
+    return;
+  }
+
+  command.set_position(position);
+  command.set_wall_clock(target_time_ns);
+  command.set_wait_time(0);  // No longer needed with our approach
+  command.set_command_id(GenerateCommandId());
+
   int success_count = 0;
-  for (const auto& peer_address : peer_list) {
-    // Create the command request
-    client::MusicRequest request;
-    request.set_action(action);
-    request.set_position(position);
 
-    // Use the target execution time as the wall_clock
-    request.set_wall_clock(static_cast<float>(target_time_ns));
-
-    // Each peer will need to adjust based on our estimate of their clock offset
-    // This wait_time is the amount of time the peer should wait before
-    // executing
-    request.set_wait_time(0);  // We no longer need this with our new approach
-
-    // Create the response object
-    client::MusicResponse response;
-    grpc::ClientContext context;
-    context.set_deadline(std::chrono::system_clock::now() +
-                         std::chrono::seconds(1));
-
-    LOG_DEBUG("Sending command '{}' to peer {} with target time {}", action,
-              peer_address, target_time_ns);
-
-    // Get the stub with mutex protection
-    {
-      std::lock_guard<std::mutex> lock(peers_mutex_);
-      auto it = peer_stubs_.find(peer_address);
-      if (it == peer_stubs_.end()) {
-        LOG_WARN("Peer {} disconnected before broadcast", peer_address);
-        continue;
-      }
-
-      // Use the stub to send the command
-      auto status = it->second->SendMusicCommand(&context, request, &response);
-      if (!status.ok()) {
-        LOG_ERROR("Failed to send command to peer {}: {}", peer_address,
-                  status.error_message());
-      } else {
+  // First, try to send via bidirectional streams (new method)
+  {
+    std::lock_guard<std::mutex> lock(streams_mutex_);
+    for (auto& [peer_address, stream_state] : peer_streams_) {
+      if (stream_state->IsActive() && stream_state->SendCommand(command)) {
         success_count++;
+      }
+    }
+  }
+
+  // If some peers don't have active streams, fall back to the legacy method
+  if (success_count < peer_list.size()) {
+    // Only get peers that don't have active streams
+    std::vector<std::string> legacy_peers;
+    {
+      std::lock_guard<std::mutex> streams_lock(streams_mutex_);
+      for (const auto& peer : peer_list) {
+        if (peer_streams_.find(peer) == peer_streams_.end() ||
+            !peer_streams_[peer]->IsActive()) {
+          legacy_peers.push_back(peer);
+        }
+      }
+    }
+
+    // Use legacy RPC method for these peers
+    for (const auto& peer_address : legacy_peers) {
+      client::CommandStatus response;
+      grpc::ClientContext context;
+
+      // Use adaptive timeout based on network conditions
+      int timeout_ms = std::max(
+          1000, static_cast<int>(sync_clock_.GetMaxRtt() / 1000000) * 2 + 500);
+      context.set_deadline(std::chrono::system_clock::now() +
+                           std::chrono::milliseconds(timeout_ms));
+
+      // Get the stub with mutex protection
+      {
+        std::lock_guard<std::mutex> lock(peers_mutex_);
+        auto it = peer_stubs_.find(peer_address);
+        if (it == peer_stubs_.end()) {
+          LOG_WARN("Peer {} disconnected before broadcast", peer_address);
+          continue;
+        }
+
+        // Use the stub to send the command
+        auto status =
+            it->second->SendMusicCommand(&context, command, &response);
+        if (!status.ok()) {
+          LOG_ERROR("Failed to send command to peer {}: {}", peer_address,
+                    status.error_message());
+        } else {
+          success_count++;
+        }
       }
     }
   }
@@ -533,7 +767,130 @@ void PeerNetwork::BroadcastCommand(const std::string& action, int position) {
   // Now we need to wait until the target time before executing locally
   SyncClock::SleepUntil(target_time_ns);
 
-  // The command execution is handled by the caller (AudioClient's
-  // Play/Pause/Resume/Stop method) We don't need to call the command execution
-  // here
+  // Command execution is handled by the caller
 }
+
+void PeerNetwork::BroadcastGossip() {
+  // Get the list of peers
+  std::vector<std::string> peer_addresses = GetConnectedPeers();
+
+  if (peer_addresses.empty()) {
+    LOG_DEBUG("No peers to gossip with");
+    return;
+  }
+
+  LOG_INFO("Broadcasting gossip to {} peers", peer_addresses.size());
+
+  // Create the gossip request
+  client::GossipRequest request;
+  for (const auto& peer : peer_addresses) {
+    request.add_peer_list(peer);
+  }
+
+  // Add our own server address if available
+  if (server_port_ > 0) {
+    // Get our external IP (this is a simplification, in a real system you'd
+    // need a more robust way to determine your externally-accessible address)
+    std::string our_address = "localhost:" + std::to_string(server_port_);
+    request.add_peer_list(our_address);
+  }
+
+  // Track success count for logging
+  int success_count = 0;
+
+  // Collect futures for parallel execution
+  std::vector<std::future<bool>> futures;
+
+  // Send gossip to all peers in parallel
+  for (const auto& peer_address : peer_addresses) {
+    auto future = std::async(
+        std::launch::async, [this, peer_address, &request]() -> bool {
+          client::GossipResponse response;
+          grpc::ClientContext context;
+
+          // Set a reasonable deadline
+          context.set_deadline(std::chrono::system_clock::now() +
+                               std::chrono::seconds(2));
+
+          // Get the stub with mutex protection
+          std::shared_ptr<client::ClientHandler::Stub> stub;
+          {
+            std::lock_guard<std::mutex> lock(peers_mutex_);
+            auto it = peer_stubs_.find(peer_address);
+            if (it == peer_stubs_.end()) {
+              LOG_WARN("Peer {} disconnected before gossip", peer_address);
+              return false;
+            }
+            stub = it->second;
+          }
+
+          // Use the stub to send the gossip
+          auto status = stub->Gossip(&context, request, &response);
+          if (!status.ok()) {
+            LOG_ERROR("Failed to send gossip to peer {}: {}", peer_address,
+                      status.error_message());
+            return false;
+          }
+
+          return true;
+        });
+
+    futures.push_back(std::move(future));
+  }
+
+  // Wait for all futures to complete
+  for (auto& future : futures) {
+    if (future.get()) {
+      success_count++;
+    }
+  }
+
+  LOG_INFO("Gossip complete: successfully sent to {}/{} peers", success_count,
+           peer_addresses.size());
+}
+
+void PeerNetwork::ProcessCommandQueue() {
+  LOG_INFO("Command queue processing thread started");
+
+  while (queue_running_) {
+    QueuedCommand command;
+    bool has_command = false;
+
+    // Wait for a command to be available
+    {
+      std::unique_lock<std::mutex> lock(queue_mutex_);
+      if (queue_cv_.wait_for(lock, std::chrono::seconds(1), [this] {
+            return !queue_running_ || !command_queue_.empty();
+          })) {
+        if (!queue_running_) {
+          break;
+        }
+
+        if (!command_queue_.empty()) {
+          command = command_queue_.top();
+          command_queue_.pop();
+          has_command = true;
+        }
+      }
+    }
+
+    // Process the command if we have one
+    if (has_command) {
+      // Check if it's time to execute
+      auto now = std::chrono::system_clock::now();
+      if (command.timestamp > now) {
+        // Sleep until the command's execution time
+        std::this_thread::sleep_until(command.timestamp);
+      }
+
+      // Execute the command (implementation depends on your needs)
+      LOG_INFO("Executing queued command: {}", command.command.command_id());
+
+      // ... Command execution code goes here ...
+    }
+  }
+
+  LOG_INFO("Command queue processing thread stopped");
+}
+
+int PeerNetwork::GenerateCommandId() { return next_command_id_++; }
