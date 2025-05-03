@@ -103,7 +103,7 @@ grpc::Status PeerService::SendMusicCommand(grpc::ServerContext* context,
 
   // DEBUG: get current time
   const int64_t t0 = NowNs();
-  LOG_DEBUG("Received music command from peer: {}", context->peer());
+  LOG_DEBUG("Current time: {}", t0);
   // now print in literal 00:00:00:00 time
   LOG_DEBUG("Current time: {}",
             std::chrono::duration_cast<std::chrono::hours>(
@@ -420,7 +420,7 @@ void PeerNetwork::BroadcastCommand(const std::string& action) {
 
   // DEBUG: get current time
   const int64_t t0 = NowNs();
-  LOG_DEBUG("Received music command from peer: {}", context->peer());
+  LOG_DEBUG("Current time: {}", t0);
   // now print in literal 00:00:00:00 time
   LOG_DEBUG("Current time: {}",
             std::chrono::duration_cast<std::chrono::hours>(
