@@ -92,6 +92,8 @@ void AudioClient::Play() {
   }
 
   // Wait the amount of time
+  int wait_time = peer_network_->GetConnectedPeers().size() * 10;
+  std::this_thread::sleep_for(std::chrono::milliseconds(wait_time));
   LOG_INFO("Playing audio after ns");
   player_.play();
 }

@@ -427,7 +427,6 @@ void PeerNetwork::BroadcastCommand(const std::string& action) {
   client::MusicRequest request;
   request.set_action(action);
   float target_time = NowNs() + GetAverageOffset() + 2e9;
-  request.set_target_time(static_cast<double>(target_time));
   
   // Send to all connected peers
   int success_count = 0;
@@ -443,11 +442,14 @@ void PeerNetwork::BroadcastCommand(const std::string& action) {
 
   for (const auto& peer_address : peer_list) {
 
+    // Set target time based on order
+    request.set_target_time(static_cast<double>(target_time) + (peer_list.size() - success_count)*10);
+
     // Create the response object
     client::MusicResponse response;
     grpc::ClientContext context;
     context.set_deadline(std::chrono::system_clock::now() +
-                         std::chrono::seconds(1));
+                         std::chrono::seconds(5));
 
     LOG_DEBUG("Sending command '{}' to peer {}", action, peer_address);
 
@@ -467,6 +469,7 @@ void PeerNetwork::BroadcastCommand(const std::string& action) {
                   status.error_message());
       } else {
         success_count++;
+        std::this_thread::sleep_for(std::chrono::nanoseconds(10));
       }
     }
   }
