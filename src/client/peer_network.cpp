@@ -110,16 +110,15 @@ grpc::Status PeerService::SendMusicCommand(grpc::ServerContext* context,
   float target_time = request->target_time();
 
   LOG_INFO(
-      "Received music command from peer {}: action={}",
-      context->peer(), action);
+      "Received music command from peer {}: action={} @ target_time={}",
+      context->peer(), action, target_time);
 
   // Mark that this command came from a broadcast to prevent echo
   client_->SetCommandFromBroadcast(true);
 
-  // Adjust my local clock using average offset
-  const int64_t current_time = NowNs();
-  const int64_t offset       = client_->GetPeerNetwork()->GetAverageOffset();
-  const int64_t adjusted     = current_time + offset;  
+  // Adjust target time to local time using average offset
+  const int64_t new_target_time = target_time - client_->GetPeerNetwork()->GetAverageOffset();
+  LOG_INFO("Adjusted target time: {}", new_target_time);
 
   // Execute the requested action
   if (action == "play") {
@@ -410,7 +409,8 @@ void PeerNetwork::BroadcastCommand(const std::string& action) {
   // Create the command request
   client::MusicRequest request;
   request.set_action(action);
-  request.set_target_time(static_cast<double>(10));
+  float target_time = NowNs() + GetAverageOffset() + 1e9;
+  request.set_target_time(static_cast<double>(target_time));
   
   // Send to all connected peers
   int success_count = 0;
@@ -454,7 +454,10 @@ void PeerNetwork::BroadcastCommand(const std::string& action) {
     }
   }
 
-
+  // Adjust target time to local time using average offset
+  const int64_t new_target_time = target_time - avg_offset_.load();
+  LOG_INFO("Adjusted target time: {}", new_target_time);
+  
   LOG_INFO("Broadcast complete: successfully sent to {}/{} peers",
            success_count, peer_list.size());
 }
