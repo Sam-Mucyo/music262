@@ -24,8 +24,8 @@ class PeerService final : public client::ClientHandler::Service {
                     client::PingResponse* response) override;
 
   grpc::Status Gossip(grpc::ServerContext* context,
-                    const client::GossipRequest* request,
-                    client::GossipResponse* response) override;
+                      const client::GossipRequest* request,
+                      client::GossipResponse* response) override;
 
   grpc::Status SendMusicCommand(grpc::ServerContext* context,
                                 const client::MusicRequest* request,
@@ -93,6 +93,6 @@ class PeerNetwork {
   std::map<std::string, std::unique_ptr<client::ClientHandler::Stub>>
       peer_stubs_;
   mutable std::mutex peers_mutex_;
-  mutable float rtt_;  // Maximum round-trip time for ping
+  mutable float rtt_;         // Maximum round-trip time for ping
   mutable float avg_offset_;  // Average offset from peers
 };

@@ -1,10 +1,11 @@
 #include "include/peer_network.h"
 
+#include <ifaddrs.h>
+
 #include <chrono>
 
 #include "include/client.h"
 #include "logger.h"
-#include <ifaddrs.h>
 
 // Helper: get first non-loopback IPv4 address
 std::string GetLocalIPAddress() {
@@ -34,36 +35,54 @@ grpc::Status PeerService::Ping(grpc::ServerContext* context,
                                const client::PingRequest* request,
                                client::PingResponse* response) {
   LOG_DEBUG("Received ping request from peer: {}", context->peer());
+
+  // Set t1 to current time when received
+  auto t1 = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now().time_since_epoch())
+                .count();
+
+  // Set t2 to current time when about to respond
+  auto t2 = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now().time_since_epoch())
+                .count();
+
+  // Set values in response
+  response->set_t1(t1);
+  response->set_t2(t2);
+
   return grpc::Status::OK;
 }
 
 grpc::Status PeerService::Gossip(grpc::ServerContext* context,
-                                const client::GossipRequest* request,
-                                client::GossipResponse* response) {
+                                 const client::GossipRequest* request,
+                                 client::GossipResponse* response) {
   LOG_INFO("Received GossipRequest from peer: {}", context->peer());
 
   if (!client_) {
-  LOG_ERROR("Client not initialized in PeerService");
-  return grpc::Status(grpc::StatusCode::INTERNAL, "Client not initialized");
+    LOG_ERROR("Client not initialized in PeerService");
+    return grpc::Status(grpc::StatusCode::INTERNAL, "Client not initialized");
   }
 
   std::shared_ptr<PeerNetwork> network_ptr = client_->GetPeerNetwork();
   if (!network_ptr) {
     LOG_ERROR("Peer network not available");
-    return grpc::Status(grpc::StatusCode::INTERNAL, "Peer network not available");
+    return grpc::Status(grpc::StatusCode::INTERNAL,
+                        "Peer network not available");
   }
   // use raw pointer or keep using shared_ptr directly
   PeerNetwork* network = network_ptr.get();
   if (!network) {
-  LOG_ERROR("Peer network not available");
-  return grpc::Status(grpc::StatusCode::INTERNAL, "Peer network not available");
+    LOG_ERROR("Peer network not available");
+    return grpc::Status(grpc::StatusCode::INTERNAL,
+                        "Peer network not available");
   }
 
   // Clear and reconnect
   network->DisconnectFromAllPeers();
   for (const auto& addr : request->peer_list()) {
     // Skip itself
-    if (addr == GetLocalIPAddress() + ":" + std::to_string(network->GetServerPort())) {
+    if (addr ==
+        GetLocalIPAddress() + ":" + std::to_string(network->GetServerPort())) {
       continue;
     }
     network->ConnectToPeer(addr);
@@ -84,21 +103,53 @@ grpc::Status PeerService::SendMusicCommand(grpc::ServerContext* context,
 
   const std::string& action = request->action();
   int position = request->position();
-  float wall_clock = request->wall_clock();
-  float wait_time = request->wait_time();
+  float wall_clock_ns = request->wall_clock();
 
   LOG_INFO(
       "Received music command from peer {}: action={}, position={}, "
-      "wall_clock={}",
-      context->peer(), action, position, wall_clock);
+      "target_time={}",
+      context->peer(), action, position, static_cast<int64_t>(wall_clock_ns));
 
   // Mark that this command came from a broadcast to prevent echo
   client_->SetCommandFromBroadcast(true);
 
-  // Wait appropriate amount of time
-  if (wait_time > 0) {
-    LOG_DEBUG("Waiting for {} seconds before executing command", wait_time);
-    std::this_thread::sleep_for(std::chrono::nanoseconds(static_cast<int>(wait_time)));
+  // Get a reference to the peer network for clock adjustment
+  std::shared_ptr<PeerNetwork> network_ptr = client_->GetPeerNetwork();
+  if (!network_ptr) {
+    LOG_ERROR("Peer network not available");
+    client_->SetCommandFromBroadcast(false);
+    return grpc::Status(grpc::StatusCode::INTERNAL,
+                        "Peer network not available");
+  }
+
+  // Get clock offset from network
+  float clock_offset = network_ptr->GetAverageOffset();
+
+  // Calculate the target execution time
+  // If time is in the future, wait until it's time to execute
+  // If time is in the past, execute immediately
+  int64_t target_time_ns = static_cast<int64_t>(wall_clock_ns);
+  int64_t current_time_ns =
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::high_resolution_clock::now().time_since_epoch())
+          .count();
+
+  // Adjust the target time based on our clock offset
+  target_time_ns -= static_cast<int64_t>(clock_offset);
+
+  if (target_time_ns > current_time_ns) {
+    // We need to wait until the target time
+    int64_t wait_ns = target_time_ns - current_time_ns;
+
+    LOG_DEBUG("Waiting {} ns before executing command (target time: {})",
+              wait_ns, target_time_ns);
+
+    // Wait until the exact target time
+    auto target_timepoint = std::chrono::high_resolution_clock::now() +
+                            std::chrono::nanoseconds(wait_ns);
+    std::this_thread::sleep_until(target_timepoint);
+  } else {
+    LOG_DEBUG("Target time already passed, executing immediately");
   }
 
   // Execute the requested action
@@ -292,47 +343,94 @@ float PeerNetwork::CalculateAverageOffset() const {
     return 0.0f;
   }
 
-  float total_offset = 0;
-  float rtt = 0;
+  float total_offset = 0.0f;
+  float max_rtt = 0.0f;
+  int successful_pings = 0;
+
+  // Perform multiple pings to get more accurate measurements
+  const int NUM_PINGS = 5;
+
   for (const auto& entry : peer_stubs_) {
-    client::PingRequest request;
-    client::PingResponse response;
-    grpc::ClientContext context;
+    float peer_offset = 0.0f;
+    float peer_rtt = 0.0f;
 
-    // Set t0 current time
-    int t0 = static_cast<int>(
-        std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::steady_clock::now().time_since_epoch())
-            .count());
+    for (int i = 0; i < NUM_PINGS; i++) {
+      client::PingRequest request;
+      client::PingResponse response;
+      grpc::ClientContext context;
 
-    auto status = entry.second->Ping(&context, request, &response);
+      // Set deadline for ping request
+      context.set_deadline(std::chrono::system_clock::now() +
+                           std::chrono::seconds(1));
 
-    if (!status.ok()) {
-      LOG_ERROR("Failed to get offset from peer {}: {}", entry.first,
-                status.error_message());
-      continue;
+      // Set t0 (time at client before sending request)
+      int64_t t0 = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                       std::chrono::steady_clock::now().time_since_epoch())
+                       .count();
+
+      // Send ping request
+      auto status = entry.second->Ping(&context, request, &response);
+
+      if (!status.ok()) {
+        LOG_ERROR("Failed to get offset from peer {}: {}", entry.first,
+                  status.error_message());
+        break;
+      }
+
+      // Set t3 (time at client after receiving response)
+      int64_t t3 = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                       std::chrono::steady_clock::now().time_since_epoch())
+                       .count();
+
+      // Get t1, t2 from response (times at the server)
+      int64_t t1 = response.t1();
+      int64_t t2 = response.t2();
+
+      // Calculate round-trip time: (t3-t0) - (t2-t1)
+      // Total time - server processing time
+      float current_rtt = static_cast<float>((t3 - t0) - (t2 - t1));
+
+      // Calculate clock offset: ((t1-t0) + (t2-t3))/2
+      // Estimate how much the client clock differs from the server
+      float current_offset = static_cast<float>((t1 - t0) + (t2 - t3)) / 2.0f;
+
+      LOG_DEBUG("Ping to {}: RTT={} ns, Offset={} ns", entry.first, current_rtt,
+                current_offset);
+
+      peer_offset += current_offset;
+      peer_rtt = std::max(peer_rtt, current_rtt);
     }
 
-    // Get t1, t2 from response
-    int t1 = static_cast<int>(response.t1());
-    int t2 = static_cast<int>(response.t2());
+    // Average the results from multiple pings to this peer
+    if (NUM_PINGS > 0) {
+      peer_offset /= NUM_PINGS;
+      total_offset += peer_offset;
+      max_rtt = std::max(max_rtt, peer_rtt);
+      successful_pings++;
 
-    // Set t3 current time
-    int t3 = static_cast<int>(
-        std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::steady_clock::now().time_since_epoch())
-            .count());
-    
-    // Calculate rtt and offset
-    float rtt = std::max(rtt, float((t3 - t0) - (t2 - t1)));
-    float offset = (t1 - t0 + t2 - t3) / 2;
-
-    total_offset += offset;
+      LOG_INFO("Average offset from peer {}: {} ns, RTT: {} ns", entry.first,
+               peer_offset, peer_rtt);
+    }
   }
 
-  // assign peer network avg_offset to this
-  avg_offset_ = float(total_offset / peer_stubs_.size());
-  return avg_offset_;
+  if (successful_pings == 0) {
+    LOG_WARN("No successful pings to calculate offset");
+    return 0.0f;
+  }
+
+  // Calculate and store the average offset across all peers
+  float new_avg_offset = total_offset / successful_pings;
+
+  // Store max RTT for use in sync calculations
+  const_cast<PeerNetwork*>(this)->rtt_ = max_rtt;
+
+  // Store average offset
+  const_cast<PeerNetwork*>(this)->avg_offset_ = new_avg_offset;
+
+  LOG_INFO("Calculated network average offset: {} ns, max RTT: {} ns",
+           new_avg_offset, max_rtt);
+
+  return new_avg_offset;
 }
 
 void PeerNetwork::BroadcastGossip() {
@@ -350,7 +448,7 @@ void PeerNetwork::BroadcastGossip() {
     request.add_peer_list(peer);
   }
   request.add_peer_list(GetLocalIPAddress() + ":" +
-                   std::to_string(server_port_));
+                        std::to_string(server_port_));
 
   for (const auto& peer : peer_list) {
     grpc::ClientContext context;
@@ -362,7 +460,8 @@ void PeerNetwork::BroadcastGossip() {
       if (it == peer_stubs_.end()) continue;
       auto status = it->second->Gossip(&context, request, &response);
       if (!status.ok()) {
-        LOG_ERROR("Failed to send gossip to {}: {}", peer, status.error_message());
+        LOG_ERROR("Failed to send gossip to {}: {}", peer,
+                  status.error_message());
       } else {
         LOG_INFO("Sent gossip to {}", peer);
       }
@@ -373,6 +472,9 @@ void PeerNetwork::BroadcastGossip() {
 }
 
 void PeerNetwork::BroadcastCommand(const std::string& action, int position) {
+  // First, recalculate network timing to ensure we have fresh data
+  CalculateAverageOffset();
+
   std::vector<std::string> peer_list;
   {
     std::lock_guard<std::mutex> lock(peers_mutex_);
@@ -391,23 +493,37 @@ void PeerNetwork::BroadcastCommand(const std::string& action, int position) {
   LOG_INFO("Broadcasting command '{}' with position {} to {} peers", action,
            position, peer_list.size());
 
+  // Calculate execution time for all peers
+  // Use RTT to determine how much time to add for network delay
+  // Add a safety margin to account for processing time
+  float safety_margin_ns = 1000000.0f;  // 1ms safety margin
+
+  // Calculate the target execution time in the future
+  // We want all peers to execute this command at approximately the same time
+  auto now = std::chrono::high_resolution_clock::now();
+  auto target_time = now + std::chrono::nanoseconds(
+                               static_cast<int64_t>(rtt_ + safety_margin_ns));
+
+  // Convert to nanoseconds since epoch for sending in messages
+  auto target_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                            target_time.time_since_epoch())
+                            .count();
+
   // Send to all connected peers
   int success_count = 0;
   for (const auto& peer_address : peer_list) {
-
     // Create the command request
     client::MusicRequest request;
     request.set_action(action);
     request.set_position(position);
 
-    // Use current timestamp
-    auto now = std::chrono::high_resolution_clock::now();
-    auto duration = now.time_since_epoch();
-    auto seconds =
-        std::chrono::duration_cast<std::chrono::duration<float>>(duration)
-            .count();
-    request.set_wall_clock(seconds);
-    request.set_wait_time((peer_list.size() - success_count)*10);
+    // Use the target execution time as the wall_clock
+    request.set_wall_clock(static_cast<float>(target_time_ns));
+
+    // Each peer will need to adjust based on our estimate of their clock offset
+    // This wait_time is the amount of time the peer should wait before
+    // executing
+    request.set_wait_time(0);  // We no longer need this with our new approach
 
     // Create the response object
     client::MusicResponse response;
@@ -415,10 +531,10 @@ void PeerNetwork::BroadcastCommand(const std::string& action, int position) {
     context.set_deadline(std::chrono::system_clock::now() +
                          std::chrono::seconds(1));
 
-    LOG_DEBUG("Sending command '{}' to peer {}", action, peer_address);
+    LOG_DEBUG("Sending command '{}' to peer {} with target time {}", action,
+              peer_address, target_time_ns);
 
     // Get the stub with mutex protection
-    std::unique_ptr<client::ClientHandler::Stub> stub;
     {
       std::lock_guard<std::mutex> lock(peers_mutex_);
       auto it = peer_stubs_.find(peer_address);
@@ -426,19 +542,33 @@ void PeerNetwork::BroadcastCommand(const std::string& action, int position) {
         LOG_WARN("Peer {} disconnected before broadcast", peer_address);
         continue;
       }
-      // Use the stub
+
+      // Use the stub to send the command
       auto status = it->second->SendMusicCommand(&context, request, &response);
       if (!status.ok()) {
         LOG_ERROR("Failed to send command to peer {}: {}", peer_address,
                   status.error_message());
       } else {
         success_count++;
-        std::this_thread::sleep_for(
-            std::chrono::nanoseconds(10));
       }
     }
   }
 
   LOG_INFO("Broadcast complete: successfully sent to {}/{} peers",
            success_count, peer_list.size());
+
+  // Now we need to wait until the target time before executing locally
+  auto current_time = std::chrono::high_resolution_clock::now();
+  if (current_time < target_time) {
+    auto wait_duration = target_time - current_time;
+    LOG_DEBUG(
+        "Waiting {} ns before executing local command",
+        std::chrono::duration_cast<std::chrono::nanoseconds>(wait_duration)
+            .count());
+    std::this_thread::sleep_until(target_time);
+  }
+
+  // The command execution is handled by the caller (AudioClient's
+  // Play/Pause/Resume/Stop method) We don't need to call the command execution
+  // here
 }

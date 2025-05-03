@@ -62,7 +62,7 @@ bool AudioPlayer::loadFromMemory(const char* data, size_t size) {
     AudioComponentInstanceDispose(audioUnit);
     audioUnit = nullptr;
   }
-  
+
   if (size < sizeof(WavHeader)) {
     std::cerr << "Data too small to be a valid WAV file." << std::endl;
     return false;
