@@ -99,41 +99,18 @@ grpc::Status PeerService::SendMusicCommand(grpc::ServerContext* context,
 
   const std::string& action = request->action();
   int position = request->position();
-  TimePointNs target_time_ns = request->wall_clock_ns();
+  int64_t wait_ms = request->wait_time_ms();
 
   LOG_INFO(
-      "Received music command from peer {}: action={}, position={}, "
-      "target_time={}",
-      context->peer(), action, position, target_time_ns);
+      "Received music command from peer {}: action={}, position={}, wait_ms={}",
+      context->peer(), action, position, wait_ms);
 
   // Mark that this command came from a broadcast to prevent echo
   client_->SetCommandFromBroadcast(true);
 
-  // Get a reference to the peer network for clock adjustment
-  std::shared_ptr<PeerNetwork> network_ptr = client_->GetPeerNetwork();
-  if (!network_ptr) {
-    LOG_ERROR("Peer network not available");
-    client_->SetCommandFromBroadcast(false);
-    return grpc::Status(grpc::StatusCode::INTERNAL,
-                        "Peer network not available");
-  }
-
-  // Get the SyncClock from the network
-  const SyncClock& sync_clock = network_ptr->GetSyncClock();
-
-  // Get clock offset from network
-  float clock_offset = sync_clock.GetAverageOffset();
-
-  // Calculate the target execution time
-  // If time is in the future, wait until it's time to execute
-  // If time is in the past, execute immediately
-  TimePointNs adjusted_time_ns =
-      SyncClock::AdjustTargetTime(target_time_ns, clock_offset);
-
-  // Schedule playback without blocking RPC
-  std::thread([client = client_, action, position, adjusted_time_ns]() {
-    TimePointNs now = SyncClock::GetCurrentTimeNs();
-    if (adjusted_time_ns > now) SyncClock::SleepUntil(adjusted_time_ns);
+  std::thread([client = client_, action, position, wait_ms]() {
+    if (wait_ms > 0)
+      std::this_thread::sleep_for(std::chrono::milliseconds(wait_ms));
     if (action == "play")
       client->Play();
     else if (action == "pause")
@@ -460,19 +437,19 @@ void PeerNetwork::BroadcastCommand(const std::string& action, int position) {
   LOG_INFO("Broadcasting command '{}' with position {} to {} peers", action,
            position, peer_list.size());
 
-  // Calculate target execution time using SyncClock
-  // Add a safety margin to account for processing time (1ms)
+  // Add a safety margin to account for timing jitter (1ms)
   float safety_margin_ns = 1000000.0f;
-  TimePointNs target_time_ns =
-      sync_clock_.CalculateTargetExecutionTime(safety_margin_ns);
+  TimePointNs target_time_ns = sync_clock_.CalculateTargetExecutionTime(safety_margin_ns);
+  // Compute relative wait time in milliseconds
+  TimePointNs now_ns = SyncClock::GetCurrentTimeNs();
+  int64_t wait_ms = target_time_ns > now_ns ? (target_time_ns - now_ns) / 1000000 : 0;
 
   // Dispatch non-blocking RPCs to all peers
   for (const auto& peer_address : peer_list) {
     client::MusicRequest request;
     request.set_action(action);
     request.set_position(position);
-    request.set_wall_clock_ns(target_time_ns);
-    request.set_wait_time_ms(0);
+    request.set_wait_time_ms(wait_ms);
 
     std::thread([this, peer_address, request]() {
       client::MusicResponse response;
@@ -494,7 +471,7 @@ void PeerNetwork::BroadcastCommand(const std::string& action, int position) {
       }
     }).detach();
   }
-  LOG_INFO("Dispatched command '{}' to {} peers", action, peer_list.size());
-  // Sleep until the target execution time for local playback
-  SyncClock::SleepUntil(target_time_ns);
+  LOG_INFO("Dispatched command '{}' to {} peers, wait_ms={}", action, peer_list.size(), wait_ms);
+  // Sleep locally for the same delay
+  std::this_thread::sleep_for(std::chrono::milliseconds(wait_ms));
 }
