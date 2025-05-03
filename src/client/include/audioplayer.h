@@ -55,11 +55,42 @@ class AudioPlayer {
 
   /**
    * @brief get the current position of the song
+   * @return the current position in bytes
    */
   unsigned int get_position() const;
 
   // Get reference to the current position object
   std::atomic<unsigned int>& get_position_ref() { return currentPosition; }
+
+  /**
+   * @brief Check if the player is currently playing
+   * @return true if playing, false otherwise
+   */
+  bool isPlaying() const { return playing.load(); }
+
+  /**
+   * @brief Get the WAV header
+   * @return The WAV header
+   */
+  const WavHeader& get_header() const { return header; }
+
+  /**
+   * @brief Get the audio data
+   * @return The audio data
+   */
+  const std::vector<char>& get_audio_data() const { return audioData; }
+
+  /**
+   * @brief Set the current position (for testing)
+   * @param position The new position
+   */
+  void set_position(unsigned int position) { currentPosition.store(position); }
+
+  /**
+   * @brief Set the playing state (for testing)
+   * @param isPlaying The new playing state
+   */
+  void set_playing(bool isPlaying) { playing.store(isPlaying); }
 
  private:
   static OSStatus RenderCallback(void* inRefCon,

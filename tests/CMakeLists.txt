@@ -1,27 +1,48 @@
 # Tests CMakeLists.txt
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.10)
+project(music262_tests)
 
-# Include directories for tests
+# Find GTest package
+find_package(GTest REQUIRED)
+
+# Common include directories for all tests
 include_directories(
     ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/src/client
-    ${CMAKE_SOURCE_DIR}/src/common
 )
 
-# Create test executable for AudioPlayer
-add_executable(audioplayer_test
-    audioplayer_test.cpp
-    ${CMAKE_SOURCE_DIR}/src/client/audioplayer.cpp
+# Define common test libraries
+set(COMMON_TEST_LIBRARIES
+    gtest
+    gmock
+    gtest_main
+    spdlog
+    test_utils
 )
 
-# Link against Google Test and required libraries
-target_link_libraries(audioplayer_test
-    PRIVATE
-    GTest::gtest_main
-    spdlog::spdlog
+# Define Mac-specific frameworks
+set(MAC_FRAMEWORKS
     "-framework CoreAudio"
     "-framework AudioToolbox"
 )
 
-# Register test with CTest
-gtest_discover_tests(audioplayer_test)
+# Function to add test with proper dependencies
+function(add_module_test TEST_NAME TEST_SOURCE MODULE_SOURCE)
+    add_executable(${TEST_NAME} ${TEST_SOURCE} ${MODULE_SOURCE})
+    
+    # Link against common test libraries
+    target_link_libraries(${TEST_NAME} PRIVATE ${COMMON_TEST_LIBRARIES})
+    
+    # Add Mac frameworks if needed
+    if(APPLE)
+        target_link_libraries(${TEST_NAME} PRIVATE ${MAC_FRAMEWORKS})
+    endif()
+    
+    # Register with CTest
+    gtest_discover_tests(${TEST_NAME})
+endfunction()
+
+# Add subdirectories for each module's tests
+# Note: testlib must be first as it builds the test_utils library
+add_subdirectory(testlib)
+add_subdirectory(client)
+add_subdirectory(server)

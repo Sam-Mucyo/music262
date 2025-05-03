@@ -13,20 +13,30 @@ AudioPlayer::AudioPlayer()
 AudioPlayer::~AudioPlayer() {
   playing.store(false);
   if (audioUnit) {
-    // AudioOutputUnitStop(audioUnit);
+    AudioOutputUnitStop(audioUnit);
     AudioUnitUninitialize(audioUnit);
     AudioComponentInstanceDispose(audioUnit);
+    audioUnit = nullptr;
   }
 }
 
 bool AudioPlayer::load(const std::string& filePath) {
+  // Always stop playback and cleanup when loading a new file
+  if (audioUnit) {
+    playing.store(false);
+    AudioOutputUnitStop(audioUnit);
+    AudioUnitUninitialize(audioUnit);
+    AudioComponentInstanceDispose(audioUnit);
+    audioUnit = nullptr;
+  }
+
   std::ifstream file(filePath, std::ios::binary);
   if (!file) {
     std::cerr << "Could not open WAV file: " << filePath << std::endl;
     return false;
   }
 
-  // Read header
+  // Read header (checked tests)
   file.read(reinterpret_cast<char*>(&header), sizeof(WavHeader));
   if (std::strncmp(header.riff, "RIFF", 4) != 0 ||
       std::strncmp(header.wave, "WAVE", 4) != 0) {
@@ -38,12 +48,21 @@ bool AudioPlayer::load(const std::string& filePath) {
   audioData.clear();
   file.seekg(sizeof(WavHeader), std::ios::beg);
   audioData.assign(std::istreambuf_iterator<char>(file), {});
-  currentPosition.store(0);
+  currentPosition.store(sizeof(WavHeader));
 
   return setupAudioUnit();
 }
 
 bool AudioPlayer::loadFromMemory(const char* data, size_t size) {
+  // Always stop playback and cleanup when loading a new file
+  if (audioUnit) {
+    playing.store(false);
+    AudioOutputUnitStop(audioUnit);
+    AudioUnitUninitialize(audioUnit);
+    AudioComponentInstanceDispose(audioUnit);
+    audioUnit = nullptr;
+  }
+  
   if (size < sizeof(WavHeader)) {
     std::cerr << "Data too small to be a valid WAV file." << std::endl;
     return false;
@@ -126,14 +145,24 @@ void AudioPlayer::play() {
     return;
   }
 
-  if (AudioOutputUnitStart(audioUnit) != noErr) {
-    std::cerr << "Failed to start audio unit.\n";
-    return;
+  // Reset position to the beginning if we're at the end of the file
+  unsigned int totalSize = sizeof(WavHeader) + audioData.size();
+  if (currentPosition.load() >= totalSize) {
+    currentPosition.store(sizeof(WavHeader));
   }
 
-  playing.store(true);
-  AudioOutputUnitStart(audioUnit);
-  return;
+  // Only start the audio unit if we're not already playing
+  if (!playing.load()) {
+    playing.store(true);
+    if (AudioOutputUnitStart(audioUnit) != noErr) {
+      std::cerr << "Failed to start audio unit.\n";
+      playing.store(false);
+      return;
+    }
+    std::cout << "Started audio playback.\n";
+  } else {
+    std::cout << "Audio is already playing.\n";
+  }
 }
 
 void AudioPlayer::pause() {
@@ -159,7 +188,7 @@ void AudioPlayer::resume() {
 void AudioPlayer::stop() {
   if (playing.load()) {
     playing.store(false);
-    currentPosition.store(0);
+    currentPosition.store(sizeof(WavHeader));
     AudioOutputUnitStop(audioUnit);
     std::cout << "Stopped audio.\n";
   } else {
@@ -184,7 +213,10 @@ OSStatus AudioPlayer::RenderCallback(void* inRefCon,
   int bytesPerFrame = bytesPerSample * channels;
 
   unsigned int position = player->currentPosition.load();
-  unsigned int bytesAvailable = player->audioData.size() - position;
+  unsigned int dataPosition =
+      position -
+      sizeof(WavHeader);  // Adjust position to be relative to audio data
+  unsigned int bytesAvailable = player->audioData.size() - dataPosition;
   unsigned int framesAvailable = bytesAvailable / bytesPerFrame;
 
   UInt32 framesToRender = std::min(inNumberFrames, framesAvailable);
@@ -192,8 +224,9 @@ OSStatus AudioPlayer::RenderCallback(void* inRefCon,
   // Read audio to buffer
   for (UInt32 i = 0; i < framesToRender; ++i) {
     for (int ch = 0; ch < channels; ++ch) {
-      int idx = position + (i * bytesPerFrame) + (ch * bytesPerSample);
-      int16_t sample = *reinterpret_cast<int16_t*>(&player->audioData[idx]);
+      int idx = dataPosition + (i * bytesPerFrame) + (ch * bytesPerSample);
+      int16_t sample =
+          *reinterpret_cast<const int16_t*>(&player->audioData[idx]);
       outBuffer[i * channels + ch] = sample / 32768.0f;
     }
   }
@@ -205,9 +238,16 @@ OSStatus AudioPlayer::RenderCallback(void* inRefCon,
     }
   }
 
-  player->currentPosition.fetch_add(framesToRender * bytesPerFrame);
+  // Update position
+  if (framesToRender > 0) {
+    player->currentPosition.fetch_add(framesToRender * bytesPerFrame);
+  }
+
+  // If we've reached the end of the file, stop playback
   if (framesToRender < inNumberFrames) {
     player->playing.store(false);
+    // Also stop the audio unit to prevent silent playback
+    AudioOutputUnitStop(player->audioUnit);
   }
 
   return noErr;

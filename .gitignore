@@ -11,6 +11,8 @@ build/
 compile_commands.json
 
 
+sample_music/
+
 # OS generated files
 .DS_Store
 .DS_Store?
