@@ -73,7 +73,7 @@ class PeerNetwork {
   float GetAverageOffset() const { return avg_offset_; }
 
   // Broadcast a command to all connected peers
-  void BroadcastCommand(const std::string& action, int position);
+  void BroadcastCommand(const std::string& action);
 
   // Broadcast gossip to all connected peers
   void BroadcastGossip();

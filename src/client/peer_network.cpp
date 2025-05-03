@@ -33,6 +33,29 @@ PeerService::PeerService(AudioClient* client) : client_(client) {
 grpc::Status PeerService::Ping(grpc::ServerContext* context,
                                const client::PingRequest* request,
                                client::PingResponse* response) {
+
+  // Get current time
+  float t1 = static_cast<float>(
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::steady_clock::now().time_since_epoch())
+          .count());
+  // Set t1 current time
+  response->set_t1(t1);
+  // Simulate logic
+  client_->GetPlayer();
+  if (!client_) {
+    LOG_ERROR("Client not initialized in PeerService");
+    return grpc::Status(grpc::StatusCode::INTERNAL, "Client not initialized");
+  }
+
+  // Get t2 current time
+  float t2 = static_cast<float>(
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::steady_clock::now().time_since_epoch())
+          .count());
+  // Set t3 to current time
+  response->set_t2(t2);
+                                
   LOG_DEBUG("Received ping request from peer: {}", context->peer());
   return grpc::Status::OK;
 }
@@ -70,7 +93,7 @@ grpc::Status PeerService::Gossip(grpc::ServerContext* context,
   }
 
   // Calculate average offset for future use
-  // network->SetAverageOffset(CalculateAverageOffset());
+  network->CalculateAverageOffset();
   return grpc::Status::OK;
 }
 
@@ -83,23 +106,13 @@ grpc::Status PeerService::SendMusicCommand(grpc::ServerContext* context,
   }
 
   const std::string& action = request->action();
-  int position = request->position();
-  float wall_clock = request->wall_clock();
-  float wait_time = request->wait_time();
 
   LOG_INFO(
-      "Received music command from peer {}: action={}, position={}, "
-      "wall_clock={}",
-      context->peer(), action, position, wall_clock);
+      "Received music command from peer {}: action={}",
+      context->peer(), action);
 
   // Mark that this command came from a broadcast to prevent echo
   client_->SetCommandFromBroadcast(true);
-
-  // Wait appropriate amount of time
-  if (wait_time > 0) {
-    LOG_DEBUG("Waiting for {} seconds before executing command", wait_time);
-    std::this_thread::sleep_for(std::chrono::nanoseconds(static_cast<int>(wait_time)));
-  }
 
   // Execute the requested action
   if (action == "play") {
@@ -300,7 +313,7 @@ float PeerNetwork::CalculateAverageOffset() const {
     grpc::ClientContext context;
 
     // Set t0 current time
-    int t0 = static_cast<int>(
+    float t0 = static_cast<float>(
         std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::steady_clock::now().time_since_epoch())
             .count());
@@ -314,11 +327,11 @@ float PeerNetwork::CalculateAverageOffset() const {
     }
 
     // Get t1, t2 from response
-    int t1 = static_cast<int>(response.t1());
-    int t2 = static_cast<int>(response.t2());
+    float t1 = response.t1();
+    float t2 = response.t2();
 
     // Set t3 current time
-    int t3 = static_cast<int>(
+    float t3 = static_cast<int>(
         std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::steady_clock::now().time_since_epoch())
             .count());
@@ -372,7 +385,7 @@ void PeerNetwork::BroadcastGossip() {
   CalculateAverageOffset();
 }
 
-void PeerNetwork::BroadcastCommand(const std::string& action, int position) {
+void PeerNetwork::BroadcastCommand(const std::string& action) {
   std::vector<std::string> peer_list;
   {
     std::lock_guard<std::mutex> lock(peers_mutex_);
@@ -388,8 +401,7 @@ void PeerNetwork::BroadcastCommand(const std::string& action, int position) {
     }
   }
 
-  LOG_INFO("Broadcasting command '{}' with position {} to {} peers", action,
-           position, peer_list.size());
+  LOG_INFO("Broadcasting command '{}' to {} peers", action, peer_list.size());
 
   // Send to all connected peers
   int success_count = 0;
@@ -398,16 +410,6 @@ void PeerNetwork::BroadcastCommand(const std::string& action, int position) {
     // Create the command request
     client::MusicRequest request;
     request.set_action(action);
-    request.set_position(position);
-
-    // Use current timestamp
-    auto now = std::chrono::high_resolution_clock::now();
-    auto duration = now.time_since_epoch();
-    auto seconds =
-        std::chrono::duration_cast<std::chrono::duration<float>>(duration)
-            .count();
-    request.set_wall_clock(seconds);
-    request.set_wait_time((peer_list.size() - success_count)*10);
 
     // Create the response object
     client::MusicResponse response;
