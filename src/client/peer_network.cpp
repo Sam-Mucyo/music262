@@ -101,6 +101,15 @@ grpc::Status PeerService::SendMusicCommand(grpc::ServerContext* context,
     return grpc::Status(grpc::StatusCode::INTERNAL, "Client not initialized");
   }
 
+  // DEBUG: get current time
+  const int64_t t0 = NowNs();
+  LOG_DEBUG("Received music command from peer: {}", context->peer());
+  // now print in literal 00:00:00:00 time
+  LOG_DEBUG("Current time: {}",
+            std::chrono::duration_cast<std::chrono::hours>(
+                std::chrono::nanoseconds(t0))
+                .count());
+
   const std::string& action = request->action();
   float target_time = request->target_time();
 
@@ -115,15 +124,6 @@ grpc::Status PeerService::SendMusicCommand(grpc::ServerContext* context,
   const int64_t current_time = NowNs();
   const int64_t offset       = client_->GetPeerNetwork()->GetAverageOffset();
   const int64_t adjusted     = current_time + offset;  
-
-  // Wait appropriate time
-  const int64_t target = static_cast<int64_t>(request->target_time());
-  const int64_t wait   = target - adjusted;
-  if (wait > 0) {
-    std::this_thread::sleep_for(std::chrono::nanoseconds(wait));
-  } else {
-    LOG_WARN("Target time is in the past, skipping wait");
-  }
 
   // Execute the requested action
   if (action == "play") {
@@ -413,11 +413,20 @@ void PeerNetwork::BroadcastCommand(const std::string& action) {
   // Create the command request
   client::MusicRequest request;
   request.set_action(action);
-  const int64_t target_time = NowNs() + 2 * GetAverageOffset();
-  request.set_target_time(static_cast<double>(target_time));
+  request.set_target_time(static_cast<double>(10));
   
   // Send to all connected peers
   int success_count = 0;
+
+  // DEBUG: get current time
+  const int64_t t0 = NowNs();
+  LOG_DEBUG("Received music command from peer: {}", context->peer());
+  // now print in literal 00:00:00:00 time
+  LOG_DEBUG("Current time: {}",
+            std::chrono::duration_cast<std::chrono::hours>(
+                std::chrono::nanoseconds(t0))
+                .count());
+
   for (const auto& peer_address : peer_list) {
 
     // Create the response object
@@ -448,17 +457,7 @@ void PeerNetwork::BroadcastCommand(const std::string& action) {
     }
   }
 
+
   LOG_INFO("Broadcast complete: successfully sent to {}/{} peers",
            success_count, peer_list.size());
-
-  LOG_INFO("MINE: Current time {}, target time: {}",
-           static_cast<float>(
-               std::chrono::duration_cast<std::chrono::nanoseconds>(
-                   std::chrono::steady_clock::now().time_since_epoch())
-                   .count()),
-           target_time);
-
-  // Sleep until target time arrives
-  const int64_t wait = target_time - NowNs();
-  if (wait > 0) std::this_thread::sleep_for(std::chrono::nanoseconds(wait));
 }
