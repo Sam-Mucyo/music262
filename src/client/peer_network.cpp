@@ -37,14 +37,10 @@ grpc::Status PeerService::Ping(grpc::ServerContext* context,
   LOG_DEBUG("Received ping request from peer: {}", context->peer());
 
   // Set t1 to current time when received
-  auto t1 = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                std::chrono::steady_clock::now().time_since_epoch())
-                .count();
+  auto t1 = SyncClock::GetCurrentTimeNs();
 
   // Set t2 to current time when about to respond
-  auto t2 = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                std::chrono::steady_clock::now().time_since_epoch())
-                .count();
+  auto t2 = SyncClock::GetCurrentTimeNs();
 
   // Set values in response
   response->set_t1(t1);
@@ -122,32 +118,30 @@ grpc::Status PeerService::SendMusicCommand(grpc::ServerContext* context,
                         "Peer network not available");
   }
 
+  // Get the SyncClock from the network
+  const SyncClock& sync_clock = network_ptr->GetSyncClock();
+
   // Get clock offset from network
-  float clock_offset = network_ptr->GetAverageOffset();
+  float clock_offset = sync_clock.GetAverageOffset();
 
   // Calculate the target execution time
   // If time is in the future, wait until it's time to execute
   // If time is in the past, execute immediately
-  int64_t target_time_ns = static_cast<int64_t>(wall_clock_ns);
-  int64_t current_time_ns =
-      std::chrono::duration_cast<std::chrono::nanoseconds>(
-          std::chrono::high_resolution_clock::now().time_since_epoch())
-          .count();
+  TimePointNs target_time_ns = static_cast<TimePointNs>(wall_clock_ns);
 
   // Adjust the target time based on our clock offset
-  target_time_ns -= static_cast<int64_t>(clock_offset);
+  TimePointNs adjusted_time_ns =
+      SyncClock::AdjustTargetTime(target_time_ns, clock_offset);
 
-  if (target_time_ns > current_time_ns) {
-    // We need to wait until the target time
-    int64_t wait_ns = target_time_ns - current_time_ns;
+  // Wait until the target time (if in the future)
+  TimePointNs current_time_ns = SyncClock::GetCurrentTimeNs();
 
-    LOG_DEBUG("Waiting {} ns before executing command (target time: {})",
-              wait_ns, target_time_ns);
+  if (adjusted_time_ns > current_time_ns) {
+    LOG_DEBUG("Waiting until target time: {} (current time: {})",
+              adjusted_time_ns, current_time_ns);
 
-    // Wait until the exact target time
-    auto target_timepoint = std::chrono::high_resolution_clock::now() +
-                            std::chrono::nanoseconds(wait_ns);
-    std::this_thread::sleep_until(target_timepoint);
+    // Sleep until the target time
+    SyncClock::SleepUntil(adjusted_time_ns);
   } else {
     LOG_DEBUG("Target time already passed, executing immediately");
   }
@@ -343,7 +337,7 @@ float PeerNetwork::CalculateAverageOffset() const {
     return 0.0f;
   }
 
-  float total_offset = 0.0f;
+  std::vector<float> offsets;
   float max_rtt = 0.0f;
   int successful_pings = 0;
 
@@ -351,7 +345,7 @@ float PeerNetwork::CalculateAverageOffset() const {
   const int NUM_PINGS = 5;
 
   for (const auto& entry : peer_stubs_) {
-    float peer_offset = 0.0f;
+    std::vector<float> peer_offsets;
     float peer_rtt = 0.0f;
 
     for (int i = 0; i < NUM_PINGS; i++) {
@@ -364,9 +358,7 @@ float PeerNetwork::CalculateAverageOffset() const {
                            std::chrono::seconds(1));
 
       // Set t0 (time at client before sending request)
-      int64_t t0 = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                       std::chrono::steady_clock::now().time_since_epoch())
-                       .count();
+      TimePointNs t0 = SyncClock::GetCurrentTimeNs();
 
       // Send ping request
       auto status = entry.second->Ping(&context, request, &response);
@@ -378,38 +370,31 @@ float PeerNetwork::CalculateAverageOffset() const {
       }
 
       // Set t3 (time at client after receiving response)
-      int64_t t3 = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                       std::chrono::steady_clock::now().time_since_epoch())
-                       .count();
+      TimePointNs t3 = SyncClock::GetCurrentTimeNs();
 
-      // Get t1, t2 from response (times at the server)
-      int64_t t1 = response.t1();
-      int64_t t2 = response.t2();
-
-      // Calculate round-trip time: (t3-t0) - (t2-t1)
-      // Total time - server processing time
-      float current_rtt = static_cast<float>((t3 - t0) - (t2 - t1));
-
-      // Calculate clock offset: ((t1-t0) + (t2-t3))/2
-      // Estimate how much the client clock differs from the server
-      float current_offset = static_cast<float>((t1 - t0) + (t2 - t3)) / 2.0f;
+      // Process the ping response using SyncClock
+      auto [current_offset, current_rtt] =
+          const_cast<SyncClock&>(sync_clock_)
+              .ProcessPingResponse(t0, t3, response);
 
       LOG_DEBUG("Ping to {}: RTT={} ns, Offset={} ns", entry.first, current_rtt,
                 current_offset);
 
-      peer_offset += current_offset;
+      peer_offsets.push_back(current_offset);
       peer_rtt = std::max(peer_rtt, current_rtt);
     }
 
     // Average the results from multiple pings to this peer
-    if (NUM_PINGS > 0) {
-      peer_offset /= NUM_PINGS;
-      total_offset += peer_offset;
+    if (!peer_offsets.empty()) {
+      float peer_avg_offset =
+          std::accumulate(peer_offsets.begin(), peer_offsets.end(), 0.0f) /
+          peer_offsets.size();
+      offsets.push_back(peer_avg_offset);
       max_rtt = std::max(max_rtt, peer_rtt);
       successful_pings++;
 
       LOG_INFO("Average offset from peer {}: {} ns, RTT: {} ns", entry.first,
-               peer_offset, peer_rtt);
+               peer_avg_offset, peer_rtt);
     }
   }
 
@@ -418,14 +403,12 @@ float PeerNetwork::CalculateAverageOffset() const {
     return 0.0f;
   }
 
+  // Set the max RTT in the sync clock
+  const_cast<SyncClock&>(sync_clock_).SetMaxRtt(max_rtt);
+
   // Calculate and store the average offset across all peers
-  float new_avg_offset = total_offset / successful_pings;
-
-  // Store max RTT for use in sync calculations
-  const_cast<PeerNetwork*>(this)->rtt_ = max_rtt;
-
-  // Store average offset
-  const_cast<PeerNetwork*>(this)->avg_offset_ = new_avg_offset;
+  float new_avg_offset =
+      const_cast<SyncClock&>(sync_clock_).CalculateAverageOffset(offsets);
 
   LOG_INFO("Calculated network average offset: {} ns, max RTT: {} ns",
            new_avg_offset, max_rtt);
@@ -493,21 +476,11 @@ void PeerNetwork::BroadcastCommand(const std::string& action, int position) {
   LOG_INFO("Broadcasting command '{}' with position {} to {} peers", action,
            position, peer_list.size());
 
-  // Calculate execution time for all peers
-  // Use RTT to determine how much time to add for network delay
-  // Add a safety margin to account for processing time
-  float safety_margin_ns = 1000000.0f;  // 1ms safety margin
-
-  // Calculate the target execution time in the future
-  // We want all peers to execute this command at approximately the same time
-  auto now = std::chrono::high_resolution_clock::now();
-  auto target_time = now + std::chrono::nanoseconds(
-                               static_cast<int64_t>(rtt_ + safety_margin_ns));
-
-  // Convert to nanoseconds since epoch for sending in messages
-  auto target_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                            target_time.time_since_epoch())
-                            .count();
+  // Calculate target execution time using SyncClock
+  // Add a safety margin to account for processing time (1ms)
+  float safety_margin_ns = 1000000.0f;
+  TimePointNs target_time_ns =
+      sync_clock_.CalculateTargetExecutionTime(safety_margin_ns);
 
   // Send to all connected peers
   int success_count = 0;
@@ -558,15 +531,7 @@ void PeerNetwork::BroadcastCommand(const std::string& action, int position) {
            success_count, peer_list.size());
 
   // Now we need to wait until the target time before executing locally
-  auto current_time = std::chrono::high_resolution_clock::now();
-  if (current_time < target_time) {
-    auto wait_duration = target_time - current_time;
-    LOG_DEBUG(
-        "Waiting {} ns before executing local command",
-        std::chrono::duration_cast<std::chrono::nanoseconds>(wait_duration)
-            .count());
-    std::this_thread::sleep_until(target_time);
-  }
+  SyncClock::SleepUntil(target_time_ns);
 
   // The command execution is handled by the caller (AudioClient's
   // Play/Pause/Resume/Stop method) We don't need to call the command execution

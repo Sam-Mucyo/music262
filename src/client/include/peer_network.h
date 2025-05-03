@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "audio_sync.grpc.pb.h"
+#include "sync_clock.h"
 
 // Forward declaration
 class AudioClient;
@@ -70,13 +71,17 @@ class PeerNetwork {
   float CalculateAverageOffset() const;
 
   // Get the average offset from peers
-  float GetAverageOffset() const { return avg_offset_; }
+  float GetAverageOffset() const { return sync_clock_.GetAverageOffset(); }
 
   // Broadcast a command to all connected peers
   void BroadcastCommand(const std::string& action, int position);
 
   // Broadcast gossip to all connected peers
   void BroadcastGossip();
+
+  // Get the sync clock instance
+  SyncClock& GetSyncClock() { return sync_clock_; }
+  const SyncClock& GetSyncClock() const { return sync_clock_; }
 
  private:
   // Main client reference
@@ -93,6 +98,7 @@ class PeerNetwork {
   std::map<std::string, std::unique_ptr<client::ClientHandler::Stub>>
       peer_stubs_;
   mutable std::mutex peers_mutex_;
-  mutable float rtt_;         // Maximum round-trip time for ping
-  mutable float avg_offset_;  // Average offset from peers
+
+  // Sync clock for time synchronization
+  SyncClock sync_clock_;
 };

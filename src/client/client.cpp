@@ -91,11 +91,8 @@ void AudioClient::Play() {
     peer_network_->BroadcastCommand("play", player_.get_position());
     // BroadcastCommand now handles synchronization timing internally
     // and will delay until the right time to play
-  } else {
-    // Just play immediately if not broadcasting
-    LOG_INFO("Playing audio immediately (no sync)");
-    player_.play();
   }
+  player_.play();
 }
 
 void AudioClient::Pause() {
@@ -104,11 +101,8 @@ void AudioClient::Pause() {
     LOG_DEBUG("Broadcasting pause command to peers");
     peer_network_->BroadcastCommand("pause", player_.get_position());
     // BroadcastCommand now handles synchronization timing internally
-  } else {
-    // Just pause immediately if not broadcasting
-    LOG_INFO("Pausing audio immediately (no sync)");
-    player_.pause();
   }
+  player_.pause();
 }
 
 void AudioClient::Resume() {
@@ -117,11 +111,8 @@ void AudioClient::Resume() {
     LOG_DEBUG("Broadcasting resume command to peers");
     peer_network_->BroadcastCommand("resume", player_.get_position());
     // BroadcastCommand now handles synchronization timing internally
-  } else {
-    // Just resume immediately if not broadcasting
-    LOG_INFO("Resuming audio immediately (no sync)");
-    player_.resume();
   }
+  player_.resume();
 }
 
 void AudioClient::Stop() {
@@ -130,11 +121,8 @@ void AudioClient::Stop() {
     LOG_DEBUG("Broadcasting stop command to peers");
     peer_network_->BroadcastCommand("stop", 0);
     // BroadcastCommand now handles synchronization timing internally
-  } else {
-    // Just stop immediately if not broadcasting
-    LOG_INFO("Stopping audio immediately (no sync)");
-    player_.stop();
   }
+  player_.stop();
 }
 
 unsigned int AudioClient::GetPosition() const { return player_.get_position(); }
