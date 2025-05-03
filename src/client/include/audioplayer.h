@@ -59,6 +59,9 @@ class AudioPlayer {
    */
   unsigned int get_position() const;
 
+  // Get reference to the current position object
+  std::atomic<unsigned int>& get_position_ref() { return currentPosition; }
+
   /**
    * @brief Check if the player is currently playing
    * @return true if playing, false otherwise

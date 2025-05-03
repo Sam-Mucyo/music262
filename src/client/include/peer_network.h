@@ -23,6 +23,10 @@ class PeerService final : public client::ClientHandler::Service {
                     const client::PingRequest* request,
                     client::PingResponse* response) override;
 
+  grpc::Status Gossip(grpc::ServerContext* context,
+                    const client::GossipRequest* request,
+                    client::GossipResponse* response) override;
+
   grpc::Status SendMusicCommand(grpc::ServerContext* context,
                                 const client::MusicRequest* request,
                                 client::MusicResponse* response) override;
@@ -56,11 +60,23 @@ class PeerNetwork {
   // Disconnect from all peers
   void DisconnectFromAllPeers();
 
+  // Get the server port
+  int GetServerPort() const { return server_port_; }
+
   // Get list of connected peers
   std::vector<std::string> GetConnectedPeers() const;
 
+  // Calculate average offset from peers
+  float CalculateAverageOffset() const;
+
+  // Get the average offset from peers
+  float GetAverageOffset() const { return avg_offset_; }
+
   // Broadcast a command to all connected peers
   void BroadcastCommand(const std::string& action, int position);
+
+  // Broadcast gossip to all connected peers
+  void BroadcastGossip();
 
  private:
   // Main client reference
@@ -77,4 +93,6 @@ class PeerNetwork {
   std::map<std::string, std::unique_ptr<client::ClientHandler::Stub>>
       peer_stubs_;
   mutable std::mutex peers_mutex_;
+  mutable float rtt_;  // Maximum round-trip time for ping
+  mutable float avg_offset_;  // Average offset from peers
 };

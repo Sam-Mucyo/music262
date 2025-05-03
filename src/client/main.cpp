@@ -21,6 +21,7 @@ void PrintUsage() {
             << "  join <ip:port> - Join a peer for synchronized playback\n"
             << "  leave <ip:port> - Leave a connected peer\n"
             << "  connections - List all active peer connections\n"
+            << "  gossip - Share all active peer connections with all peers\n"
             << "  help - Show this help message\n"
             << "  quit - Exit the client\n";
 }
@@ -90,7 +91,6 @@ int main(int argc, char** argv) {
       }
     } else if (command.substr(0, 5) == "play ") {
       int song_num = std::stoi(command.substr(5));
-
       std::cout << "Loading " << song_num << "..." << std::endl;
       if (client.LoadAudio(song_num)) {
         std::cout << "Playing " << song_num << "..." << std::endl;
@@ -142,6 +142,17 @@ int main(int argc, char** argv) {
           std::cout << i + 1 << ". " << connected_peers[i] << std::endl;
         }
       }
+      float average_offset = peer_network->GetAverageOffset();
+      if (average_offset > 0) {
+        std::cout << "Average offset: "
+                  << average_offset << " ns"
+                  << std::endl;
+      } else {
+        std::cout << "Average offset: NA" << std::endl;
+      }
+    } else if (command == "gossip") {
+      peer_network->BroadcastGossip();
+      std::cout << "Gossiping peer connections to all peers." << std::endl;
     } else if (command == "help") {
       PrintUsage();
     } else if (command == "quit" || command == "exit") {
