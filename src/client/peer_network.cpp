@@ -129,8 +129,11 @@ grpc::Status PeerService::SendMusicCommand(grpc::ServerContext* context,
       client->Play();
     else if (action == "pause")
       client->Pause();
-    else if (action == "resume")
+    else if (action == "resume") {
+      // Reset to broadcaster's position to prevent drift
+      client->GetPlayer().set_position(position);
       client->Resume();
+    }
     else if (action == "stop")
       client->Stop();
     else
