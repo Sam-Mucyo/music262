@@ -129,8 +129,9 @@ grpc::Status PeerService::SendMusicCommand(grpc::ServerContext* context,
   LOG_INFO("Sleeping for {} ns", sleep_time);
   LOG_INFO("Sleeping for {} ns", sleep_time_plus);
 
-  std::this_thread::sleep_for(std::chrono::nanoseconds(sleep_time));
-
+  if (sleep_time_plus > 0) {
+    std::this_thread::sleep_for(std::chrono::nanoseconds(sleep_time_plus));
+  }
 
   // Execute the requested action
   if (action == "play") {
@@ -479,7 +480,9 @@ void PeerNetwork::BroadcastCommand(const std::string& action) {
   const int64_t sleep_time_plus = new_target_time_plus - NowNs();
   LOG_INFO("Sleeping for {} ns", sleep_time);
   LOG_INFO("Sleeping for {} ns", sleep_time_plus);
-  std::this_thread::sleep_for(std::chrono::nanoseconds(sleep_time));
+  if (sleep_time_plus > 0) {
+    std::this_thread::sleep_for(std::chrono::nanoseconds(sleep_time_plus));
+  }
   
   LOG_INFO("Broadcast complete: successfully sent to {}/{} peers",
            success_count, peer_list.size());
