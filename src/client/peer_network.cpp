@@ -99,12 +99,12 @@ grpc::Status PeerService::SendMusicCommand(grpc::ServerContext* context,
 
   const std::string& action = request->action();
   int position = request->position();
-  float wall_clock_ns = request->wall_clock();
+  TimePointNs target_time_ns = request->wall_clock_ns();
 
   LOG_INFO(
       "Received music command from peer {}: action={}, position={}, "
       "target_time={}",
-      context->peer(), action, position, static_cast<int64_t>(wall_clock_ns));
+      context->peer(), action, position, target_time_ns);
 
   // Mark that this command came from a broadcast to prevent echo
   client_->SetCommandFromBroadcast(true);
@@ -127,42 +127,26 @@ grpc::Status PeerService::SendMusicCommand(grpc::ServerContext* context,
   // Calculate the target execution time
   // If time is in the future, wait until it's time to execute
   // If time is in the past, execute immediately
-  TimePointNs target_time_ns = static_cast<TimePointNs>(wall_clock_ns);
-
-  // Adjust the target time based on our clock offset
   TimePointNs adjusted_time_ns =
       SyncClock::AdjustTargetTime(target_time_ns, clock_offset);
 
-  // Wait until the target time (if in the future)
-  TimePointNs current_time_ns = SyncClock::GetCurrentTimeNs();
-
-  if (adjusted_time_ns > current_time_ns) {
-    LOG_DEBUG("Waiting until target time: {} (current time: {})",
-              adjusted_time_ns, current_time_ns);
-
-    // Sleep until the target time
-    SyncClock::SleepUntil(adjusted_time_ns);
-  } else {
-    LOG_DEBUG("Target time already passed, executing immediately");
-  }
-
-  // Execute the requested action
-  if (action == "play") {
-    client_->Play();
-  } else if (action == "pause") {
-    client_->Pause();
-  } else if (action == "resume") {
-    client_->Resume();
-  } else if (action == "stop") {
-    client_->Stop();
-  } else {
-    LOG_WARN("Unknown command from peer: {}", action);
-  }
-
-  // Reset the broadcast flag
-  client_->SetCommandFromBroadcast(false);
-
-  LOG_DEBUG("Music command executed successfully: {}", action);
+  // Schedule playback without blocking RPC
+  std::thread([client = client_, action, position, adjusted_time_ns]() {
+    TimePointNs now = SyncClock::GetCurrentTimeNs();
+    if (adjusted_time_ns > now) SyncClock::SleepUntil(adjusted_time_ns);
+    if (action == "play")
+      client->Play();
+    else if (action == "pause")
+      client->Pause();
+    else if (action == "resume")
+      client->Resume();
+    else if (action == "stop")
+      client->Stop();
+    else
+      LOG_WARN("Unknown command from peer: {}", action);
+    client->SetCommandFromBroadcast(false);
+    LOG_DEBUG("Music command executed successfully: {}", action);
+  }).detach();
   return grpc::Status::OK;
 }
 
@@ -482,58 +466,35 @@ void PeerNetwork::BroadcastCommand(const std::string& action, int position) {
   TimePointNs target_time_ns =
       sync_clock_.CalculateTargetExecutionTime(safety_margin_ns);
 
-  // Send to all connected peers
-  int success_count = 0;
+  // Dispatch non-blocking RPCs to all peers
   for (const auto& peer_address : peer_list) {
-    // Create the command request
     client::MusicRequest request;
     request.set_action(action);
     request.set_position(position);
+    request.set_wall_clock_ns(target_time_ns);
+    request.set_wait_time_ms(0);
 
-    // Use the target execution time as the wall_clock
-    request.set_wall_clock(static_cast<float>(target_time_ns));
-
-    // Each peer will need to adjust based on our estimate of their clock offset
-    // This wait_time is the amount of time the peer should wait before
-    // executing
-    request.set_wait_time(0);  // We no longer need this with our new approach
-
-    // Create the response object
-    client::MusicResponse response;
-    grpc::ClientContext context;
-    context.set_deadline(std::chrono::system_clock::now() +
-                         std::chrono::seconds(1));
-
-    LOG_DEBUG("Sending command '{}' to peer {} with target time {}", action,
-              peer_address, target_time_ns);
-
-    // Get the stub with mutex protection
-    {
+    std::thread([this, peer_address, request]() {
+      client::MusicResponse response;
+      grpc::ClientContext context;
+      context.set_deadline(std::chrono::system_clock::now() +
+                           std::chrono::seconds(1));
       std::lock_guard<std::mutex> lock(peers_mutex_);
       auto it = peer_stubs_.find(peer_address);
       if (it == peer_stubs_.end()) {
         LOG_WARN("Peer {} disconnected before broadcast", peer_address);
-        continue;
+        return;
       }
-
-      // Use the stub to send the command
       auto status = it->second->SendMusicCommand(&context, request, &response);
       if (!status.ok()) {
         LOG_ERROR("Failed to send command to peer {}: {}", peer_address,
                   status.error_message());
       } else {
-        success_count++;
+        LOG_INFO("Sent music command to {}", peer_address);
       }
-    }
+    }).detach();
   }
-
-  LOG_INFO("Broadcast complete: successfully sent to {}/{} peers",
-           success_count, peer_list.size());
-
-  // Now we need to wait until the target time before executing locally
+  LOG_INFO("Dispatched command '{}' to {} peers", action, peer_list.size());
+  // Sleep until the target execution time for local playback
   SyncClock::SleepUntil(target_time_ns);
-
-  // The command execution is handled by the caller (AudioClient's
-  // Play/Pause/Resume/Stop method) We don't need to call the command execution
-  // here
 }
