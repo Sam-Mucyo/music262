@@ -426,7 +426,7 @@ void PeerNetwork::BroadcastCommand(const std::string& action) {
   // Create the command request
   client::MusicRequest request;
   request.set_action(action);
-  float target_time = NowNs() + GetAverageOffset() + 1e9;
+  float target_time = NowNs() + GetAverageOffset() + 2e9;
   request.set_target_time(static_cast<double>(target_time));
   
   // Send to all connected peers
