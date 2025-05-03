@@ -104,11 +104,7 @@ grpc::Status PeerService::SendMusicCommand(grpc::ServerContext* context,
   // DEBUG: get current time
   const int64_t t0 = NowNs();
   LOG_INFO("Current time: {}", t0);
-  // now print in literal 00:00:00:00 time
-  LOG_INFO("Current time: {}",
-            std::chrono::duration_cast<std::chrono::hours>(
-                std::chrono::nanoseconds(t0))
-                .count());
+  // now print in literal 00:00:00:00 time - convert t0 to standard clock display
 
   const std::string& action = request->action();
   float target_time = request->target_time();
@@ -390,6 +386,7 @@ void PeerNetwork::BroadcastGossip() {
   }
   // Calculate average offset for future use
   CalculateAverageOffset();
+  LOG_INFO("Gossip broadcast complete, offset is {}", avg_offset_.load());
 }
 
 void PeerNetwork::BroadcastCommand(const std::string& action) {
