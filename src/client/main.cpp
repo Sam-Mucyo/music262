@@ -8,6 +8,7 @@
 
 #include "include/client.h"
 #include "include/peer_network.h"
+#include "include/peer_service.h"
 #include "logger.h"
 
 void PrintUsage() {
