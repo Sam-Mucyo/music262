@@ -133,8 +133,7 @@ grpc::Status PeerService::SendMusicCommand(grpc::ServerContext* context,
       // Reset to broadcaster's position to prevent drift
       client->GetPlayer().set_position(position);
       client->Resume();
-    }
-    else if (action == "stop")
+    } else if (action == "stop")
       client->Stop();
     else
       LOG_WARN("Unknown command from peer: {}", action);
