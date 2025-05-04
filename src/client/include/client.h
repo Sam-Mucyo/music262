@@ -47,6 +47,9 @@ class AudioClient {
   // Get the list of connected client IPs
   std::vector<std::string> GetPeerClientIPs();
 
+  // Verify connection to the server
+  bool IsServerConnected();
+
   // Get reference to audio player (for peer service)
   AudioPlayer& GetPlayer() { return player_; }
 
