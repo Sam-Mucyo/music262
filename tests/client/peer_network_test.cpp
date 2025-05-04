@@ -9,6 +9,8 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <thread>
+#include <chrono>
 
 // Mock implementation of the PeerServiceInterface for testing
 class MockPeerService : public music262::PeerServiceInterface {
@@ -32,8 +34,8 @@ public:
 class PeerNetworkTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        // Create mock peer service
-        mock_peer_service = std::make_unique<testing::NiceMock<MockPeerService>>();
+        // Create mock peer service with strict expectations (will fail if unexpected calls happen)
+        mock_peer_service = std::make_unique<testing::StrictMock<MockPeerService>>();
         mock_peer_service_ptr = mock_peer_service.get();
         
         // Create the AudioClient with a mock service
@@ -48,8 +50,15 @@ protected:
     }
 
     void TearDown() override {
+        // Wait for any async operations to complete
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        
+        // Clean up resources
         peer_network.reset();
         audio_client.reset();
+        
+        // Verify all mock expectations have been satisfied
+        testing::Mock::VerifyAndClearExpectations(mock_peer_service_ptr);
     }
 
     // Helper function to set up ping test with success/failure
@@ -80,8 +89,9 @@ TEST_F(PeerNetworkTest, ConnectToPeerSuccess) {
     // Setup ping to succeed
     SetupPingTest(true);
     
-    // Expect the Ping method to be called once with the correct address
+    // Expect the Ping method to be called exactly once with the correct address
     EXPECT_CALL(*mock_peer_service_ptr, Ping(test_peer, testing::_, testing::_))
+        .Times(1)
         .WillOnce(testing::Return(true));
     
     // Call the method under test
@@ -102,8 +112,9 @@ TEST_F(PeerNetworkTest, ConnectToPeerFailure) {
     // Setup ping to fail
     SetupPingTest(false);
     
-    // Expect the Ping method to be called once and return false
+    // Expect the Ping method to be called exactly once and return false
     EXPECT_CALL(*mock_peer_service_ptr, Ping(test_peer, testing::_, testing::_))
+        .Times(1)
         .WillOnce(testing::Return(false));
     
     // Call the method under test
@@ -123,6 +134,9 @@ TEST_F(PeerNetworkTest, DisconnectFromPeer) {
     
     // First connect to a peer
     SetupPingTest(true);
+    EXPECT_CALL(*mock_peer_service_ptr, Ping(test_peer, testing::_, testing::_))
+        .Times(1)
+        .WillOnce(testing::Return(true));
     peer_network->ConnectToPeer(test_peer);
     
     // Disconnect from the peer
@@ -140,6 +154,13 @@ TEST_F(PeerNetworkTest, DisconnectFromPeer) {
 TEST_F(PeerNetworkTest, DisconnectFromAllPeers) {
     // Connect to multiple peers first
     SetupPingTest(true);
+    EXPECT_CALL(*mock_peer_service_ptr, Ping("192.168.1.1:50052", testing::_, testing::_))
+        .Times(1)
+        .WillOnce(testing::Return(true));
+    EXPECT_CALL(*mock_peer_service_ptr, Ping("192.168.1.2:50052", testing::_, testing::_))
+        .Times(1)
+        .WillOnce(testing::Return(true));
+    
     peer_network->ConnectToPeer("192.168.1.1:50052");
     peer_network->ConnectToPeer("192.168.1.2:50052");
     
@@ -157,38 +178,69 @@ TEST_F(PeerNetworkTest, DisconnectFromAllPeers) {
 TEST_F(PeerNetworkTest, BroadcastGossip) {
     // Connect to multiple peers first
     SetupPingTest(true);
+    EXPECT_CALL(*mock_peer_service_ptr, Ping("192.168.1.1:50052", testing::_, testing::_))
+        .Times(1)
+        .WillOnce(testing::Return(true));
+    EXPECT_CALL(*mock_peer_service_ptr, Ping("192.168.1.2:50052", testing::_, testing::_))
+        .Times(1)
+        .WillOnce(testing::Return(true));
+    
     peer_network->ConnectToPeer("192.168.1.1:50052");
     peer_network->ConnectToPeer("192.168.1.2:50052");
     
-    // Expect Gossip to be called for each peer
+    // Reset expectations for clear verification
+    testing::Mock::VerifyAndClearExpectations(mock_peer_service_ptr);
+    
+    // Setup expectations for the BroadcastGossip call
+    // We expect Gossip to be called exactly once for each peer
     EXPECT_CALL(*mock_peer_service_ptr, Gossip("192.168.1.1:50052", testing::_))
+        .Times(1)
         .WillOnce(testing::Return(true));
+        
     EXPECT_CALL(*mock_peer_service_ptr, Gossip("192.168.1.2:50052", testing::_))
+        .Times(1)
         .WillOnce(testing::Return(true));
     
     // Also expect CalculateAverageOffset to measure network timing
+    // Note: This tests that CalculateAverageOffset actually calls Ping
     EXPECT_CALL(*mock_peer_service_ptr, Ping(testing::_, testing::_, testing::_))
+        .Times(testing::AtLeast(1))
         .WillRepeatedly(testing::Return(true));
     
     // Call the method under test
     peer_network->BroadcastGossip();
+    
+    // Expectations will be verified when test exits
 }
 
 // Test BroadcastLoad functionality
 TEST_F(PeerNetworkTest, BroadcastLoad) {
     // Connect to multiple peers first
     SetupPingTest(true);
+    EXPECT_CALL(*mock_peer_service_ptr, Ping("192.168.1.1:50052", testing::_, testing::_))
+        .Times(1)
+        .WillOnce(testing::Return(true));
+    EXPECT_CALL(*mock_peer_service_ptr, Ping("192.168.1.2:50052", testing::_, testing::_))
+        .Times(1)
+        .WillOnce(testing::Return(true));
+    
     peer_network->ConnectToPeer("192.168.1.1:50052");
     peer_network->ConnectToPeer("192.168.1.2:50052");
     
+    // Reset expectations for clear verification
+    testing::Mock::VerifyAndClearExpectations(mock_peer_service_ptr);
+    
     int test_song_num = 3;
     
-    // Expect SendMusicCommand to be called for each peer with "load" action
+    // Expect SendMusicCommand to be called exactly once for each peer with "load" action
     EXPECT_CALL(*mock_peer_service_ptr, 
                 SendMusicCommand("192.168.1.1:50052", "load", 0, 0, test_song_num))
+        .Times(1)
         .WillOnce(testing::Return(true));
+        
     EXPECT_CALL(*mock_peer_service_ptr, 
                 SendMusicCommand("192.168.1.2:50052", "load", 0, 0, test_song_num))
+        .Times(1)
         .WillOnce(testing::Return(true));
     
     // Call the method under test
@@ -196,23 +248,38 @@ TEST_F(PeerNetworkTest, BroadcastLoad) {
     
     // Verify results
     EXPECT_TRUE(result);
+    
+    // Expectations will be verified when test exits
 }
 
 // Test BroadcastLoad with partial failure
 TEST_F(PeerNetworkTest, BroadcastLoadPartialFailure) {
     // Connect to multiple peers first
     SetupPingTest(true);
+    EXPECT_CALL(*mock_peer_service_ptr, Ping("192.168.1.1:50052", testing::_, testing::_))
+        .Times(1)
+        .WillOnce(testing::Return(true));
+    EXPECT_CALL(*mock_peer_service_ptr, Ping("192.168.1.2:50052", testing::_, testing::_))
+        .Times(1)
+        .WillOnce(testing::Return(true));
+    
     peer_network->ConnectToPeer("192.168.1.1:50052");
     peer_network->ConnectToPeer("192.168.1.2:50052");
+    
+    // Reset expectations for clear verification
+    testing::Mock::VerifyAndClearExpectations(mock_peer_service_ptr);
     
     int test_song_num = 3;
     
     // Expect SendMusicCommand to succeed for first peer but fail for second
     EXPECT_CALL(*mock_peer_service_ptr, 
                 SendMusicCommand("192.168.1.1:50052", "load", 0, 0, test_song_num))
+        .Times(1)
         .WillOnce(testing::Return(true));
+        
     EXPECT_CALL(*mock_peer_service_ptr, 
                 SendMusicCommand("192.168.1.2:50052", "load", 0, 0, test_song_num))
+        .Times(1)
         .WillOnce(testing::Return(false));
     
     // Call the method under test
@@ -220,10 +287,55 @@ TEST_F(PeerNetworkTest, BroadcastLoadPartialFailure) {
     
     // Verify it fails because not all peers succeeded
     EXPECT_FALSE(result);
+    
+    // Expectations will be verified when test exits
 }
 
-// For the BroadcastCommand test, we'll modify PeerServiceInterface to make synchronous calls
-// for better testability, since the original implementation uses detached threads
+// Test that can detect the bug in BroadcastCommand
+TEST_F(PeerNetworkTest, BroadcastCommandSendsToAllPeers) {
+    // Connect to multiple peers first
+    SetupPingTest(true);
+    EXPECT_CALL(*mock_peer_service_ptr, Ping("192.168.1.1:50052", testing::_, testing::_))
+        .Times(1)
+        .WillOnce(testing::Return(true));
+    EXPECT_CALL(*mock_peer_service_ptr, Ping("192.168.1.2:50052", testing::_, testing::_))
+        .Times(1)
+        .WillOnce(testing::Return(true));
+    
+    peer_network->ConnectToPeer("192.168.1.1:50052");
+    peer_network->ConnectToPeer("192.168.1.2:50052");
+    
+    // Reset expectations for clear verification
+    testing::Mock::VerifyAndClearExpectations(mock_peer_service_ptr);
+    
+    // Expect CalculateAverageOffset to be called to measure network timing
+    EXPECT_CALL(*mock_peer_service_ptr, Ping(testing::_, testing::_, testing::_))
+        .Times(testing::AtLeast(1))
+        .WillRepeatedly(testing::Return(true));
+    
+    // Expect SendMusicCommand to be called for each peer with play action
+    // These expectations MUST be met or the test will fail, which will catch the bug
+    EXPECT_CALL(*mock_peer_service_ptr, 
+                SendMusicCommand("192.168.1.1:50052", "play", 0, testing::_, -1))
+        .Times(1)  // Enforce that this must be called exactly once
+        .WillOnce(testing::Return(true));
+        
+    EXPECT_CALL(*mock_peer_service_ptr, 
+                SendMusicCommand("192.168.1.2:50052", "play", 0, testing::_, -1))
+        .Times(1)  // Enforce that this must be called exactly once
+        .WillOnce(testing::Return(true));
+    
+    // Call the method under test
+    peer_network->BroadcastCommand("play", 0);
+    
+    // Since we're using threads, wait for them to complete
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    
+    // GMock will automatically verify that all expected calls were made,
+    // and the test will fail if not
+}
+
+// Test server port functionality
 TEST_F(PeerNetworkTest, GetServerPort) {
     // Set up server port
     int test_port = 50052;
@@ -233,6 +345,20 @@ TEST_F(PeerNetworkTest, GetServerPort) {
     EXPECT_EQ(peer_network->GetServerPort(), test_port);
     
     // Clean up
+    peer_network->StopServer();
+}
+
+// Test StartServer and StopServer functionality
+TEST_F(PeerNetworkTest, StartAndStopServer) {
+    int test_port = 50053;
+    
+    // Start should succeed
+    EXPECT_TRUE(peer_network->StartServer(test_port));
+    
+    // Server port should be set
+    EXPECT_EQ(peer_network->GetServerPort(), test_port);
+    
+    // Stop server
     peer_network->StopServer();
 }
 
