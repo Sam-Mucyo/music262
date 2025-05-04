@@ -313,6 +313,8 @@ This led to a major refinement around May 1st-4th, which you can see in our clos
 
 We still acknowledge remaining limitations: the system doesn't have mechanisms for continuous drift correction during playback or robust handling of packet loss. However, for event-based synchronization (play, pause), this refined P2P logic proved much more effective.
 
+**Note:** An earlier version of this approach calculated a global clock time from the averages of the system clocks of each machine. As a result, all machines had offsets from the global clock that were equal in magnitude. When a machine received a command to play and a target time, it would use its offset from the global clock to adjust its wait time. While this approach worked well and we were able to synchronize five laptops, it deviates from standard NTP and may be less robust in production scenarios.
+
 # Part 6: Refactoring for Testability and Modularity
 
 As the complexity of the client application grew, particularly with the integration of server communication, audio playback, and peer-to-peer networking, we encountered significant challenges in testing and maintenance. The initial codebase, while functional, suffered from tight coupling and mixed responsibilities, making isolated testing nearly impossible. This led to a refactoring effort for testability and modularity starting around May 4th.
