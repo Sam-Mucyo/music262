@@ -1,4 +1,18 @@
 cmake_minimum_required(VERSION 3.14)
+
+# ──────────────────────────────────────────────────────────────────────────────
+# macOS deployment target (so std::filesystem is available in Qt headers)
+if(APPLE)
+  set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "" FORCE)
+endif()
+
+# Homebrew’s Qt5 is “keg-only,” so point CMake to its cmake modules
+if(APPLE)
+  set(CMAKE_PREFIX_PATH "/opt/homebrew/opt/qt@5/lib/cmake"
+      CACHE PATH "Qt5 install prefix from Homebrew" FORCE)
+endif()
+# ──────────────────────────────────────────────────────────────────────────────
+
 project(music262 VERSION 0.1.0)
 
 # Enable testing
@@ -106,3 +120,4 @@ if(ENABLE_FORMATTING)
         message(WARNING "clang-format not found, formatting disabled")
     endif()
 endif()
+
