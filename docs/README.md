@@ -7,7 +7,6 @@ This directory contains documentation for the Music262 project.
 - [How To Run](../HOW_TO_RUN.md) - Instructions for building and running the application
 - [GUI Client User Guide](gui_client.md) - Guide for the graphical user interface client
 - [Peer-to-Peer Network](peer_to_peer.md) - Documentation on the peer network architecture
-- [Peer Broadcast Fix](peer_broadcast_fix.md) - Information on peer broadcasting improvements
 
 ## Doxygen Documentation
 
