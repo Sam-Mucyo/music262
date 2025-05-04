@@ -62,9 +62,35 @@ target_link_libraries(client_test PRIVATE
     proto_lib
 )
 
+# PeerNetwork tests
+add_module_test(
+    peer_network_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/peer_network_test.cpp
+    "${CMAKE_SOURCE_DIR}/src/client/peer_network.cpp;${CMAKE_SOURCE_DIR}/src/client/sync_clock.cpp;${CMAKE_SOURCE_DIR}/src/client/peer_service_grpc.cpp;${CMAKE_SOURCE_DIR}/src/client/client.cpp;${CMAKE_SOURCE_DIR}/src/client/audioplayer.cpp"
+)
+
+# Add include paths for the PeerNetwork test
+target_include_directories(peer_network_test PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/client
+    ${CMAKE_SOURCE_DIR}/src/client/include
+    ${CMAKE_SOURCE_DIR}/src/common/include
+    ${CMAKE_BINARY_DIR}/src/proto
+)
+
+# Link against needed libraries
+target_link_libraries(peer_network_test PRIVATE
+    common
+    proto_lib
+)
+
 # If on Mac, link against CoreAudio frameworks
 if(APPLE)
     target_link_libraries(client_test PRIVATE
+        "-framework CoreAudio"
+        "-framework AudioToolbox"
+    )
+    
+    target_link_libraries(peer_network_test PRIVATE
         "-framework CoreAudio"
         "-framework AudioToolbox"
     )
