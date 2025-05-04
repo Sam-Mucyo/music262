@@ -3,15 +3,9 @@
 #include "include/peer_network.h"
 #include "logger.h"
 
-using audio_service::AudioChunk;
-using audio_service::LoadAudioRequest;
-using audio_service::PeerListRequest;
-using audio_service::PeerListResponse;
-using audio_service::PlaylistRequest;
-using audio_service::PlaylistResponse;
-
-AudioClient::AudioClient(std::shared_ptr<Channel> channel)
-    : stub_(audio_service::audio_service::NewStub(channel)),
+AudioClient::AudioClient(
+    std::unique_ptr<music262::AudioServiceInterface> audio_service)
+    : audio_service_(std::move(audio_service)),
       player_(),
       peer_sync_enabled_(false),
       command_from_broadcast_(false),
@@ -24,53 +18,25 @@ AudioClient::~AudioClient() { LOG_DEBUG("AudioClient shutting down"); }
 std::vector<std::string> AudioClient::GetPlaylist() {
   LOG_DEBUG("Requesting playlist from server");
 
-  PlaylistRequest request;
-  PlaylistResponse response;
-  ClientContext context;
-
-  Status status = stub_->GetPlaylist(&context, request, &response);
-
-  std::vector<std::string> playlist;
-  if (status.ok()) {
-    for (const auto& song : response.song_names()) {
-      playlist.push_back(song);
-    }
-    LOG_INFO("Retrieved playlist with {} songs", playlist.size());
-  } else {
-    LOG_ERROR("GetPlaylist RPC failed: {}", status.error_message());
-  }
-
-  return playlist;
+  return audio_service_->GetPlaylist();
 }
 
 bool AudioClient::LoadAudio(int song_num) {
   LOG_INFO("Loading audio for song: {}", song_num);
 
-  // Create a request to load audio
-  LoadAudioRequest request;
-  request.set_song_num(song_num);
-
-  ClientContext context;
-  std::unique_ptr<ClientReader<AudioChunk>> reader(
-      stub_->LoadAudio(&context, request));
-
   // Clear previously loaded audio data
   audio_data_.clear();
 
-  // Process the audio stream
-  AudioChunk chunk;
-  size_t total_bytes = 0;
+  // Use a callback to collect audio chunks
+  bool success = audio_service_->LoadAudio(
+      song_num, [this](const std::vector<char>& data) {
+        // Append data to our in-memory buffer
+        audio_data_.insert(audio_data_.end(), data.begin(), data.end());
+      });
 
-  while (reader->Read(&chunk)) {
-    const std::string& data = chunk.data();
-    // Append data to our in-memory buffer
-    audio_data_.insert(audio_data_.end(), data.begin(), data.end());
-    total_bytes += data.size();
-  }
-
-  Status status = reader->Finish();
-  if (status.ok()) {
-    LOG_INFO("Successfully received {} bytes for {}", total_bytes, song_num);
+  if (success) {
+    LOG_INFO("Successfully received {} bytes for {}", audio_data_.size(),
+             song_num);
 
     // Load audio data into player from memory
     if (!player_.loadFromMemory(audio_data_.data(), audio_data_.size())) {
@@ -81,7 +47,7 @@ bool AudioClient::LoadAudio(int song_num) {
     current_song_num_ = song_num;
     return true;
   } else {
-    LOG_ERROR("LoadAudio RPC failed: {}", status.error_message());
+    LOG_ERROR("LoadAudio failed");
     return false;
   }
 }
@@ -137,23 +103,7 @@ unsigned int AudioClient::GetPosition() const { return player_.get_position(); }
 std::vector<std::string> AudioClient::GetPeerClientIPs() {
   LOG_DEBUG("Requesting peer client IPs from server");
 
-  PeerListRequest request;
-  PeerListResponse response;
-  ClientContext context;
-
-  Status status = stub_->GetPeerClientIPs(&context, request, &response);
-
-  std::vector<std::string> peers;
-  if (status.ok()) {
-    for (const auto& peer : response.client_ips()) {
-      peers.push_back(peer);
-    }
-    LOG_INFO("Retrieved {} peer IPs from server", peers.size());
-  } else {
-    LOG_ERROR("GetPeerClientIPs RPC failed: {}", status.error_message());
-  }
-
-  return peers;
+  return audio_service_->GetPeerClientIPs();
 }
 
 void AudioClient::EnablePeerSync(bool enable) {
@@ -169,22 +119,5 @@ void AudioClient::SetPeerNetwork(std::shared_ptr<PeerNetwork> peer_network) {
 bool AudioClient::IsServerConnected() {
   LOG_DEBUG("Verifying server connection");
 
-  // Try to get the playlist as a simple way to check if server is responsive
-  PlaylistRequest request;
-  PlaylistResponse response;
-  ClientContext context;
-
-  // Set a deadline for the RPC
-  context.set_deadline(std::chrono::system_clock::now() +
-                       std::chrono::seconds(2));
-
-  Status status = stub_->GetPlaylist(&context, request, &response);
-
-  if (status.ok()) {
-    LOG_INFO("Server connection successful");
-    return true;
-  } else {
-    LOG_ERROR("Failed to connect to server: {}", status.error_message());
-    return false;
-  }
+  return audio_service_->IsServerConnected();
 }

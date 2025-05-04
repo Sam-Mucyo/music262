@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "audio_sync.grpc.pb.h"
+#include "peer_service_interface.h"
 #include "sync_clock.h"
 
 // Forward declaration
@@ -43,7 +44,9 @@ class PeerService final : public client::ClientHandler::Service {
 // Class to manage peer-to-peer connections
 class PeerNetwork {
  public:
-  PeerNetwork(AudioClient* client);
+  PeerNetwork(
+      AudioClient* client,
+      std::unique_ptr<music262::PeerServiceInterface> peer_service = nullptr);
   ~PeerNetwork();
 
   // Start a server to accept peer connections
@@ -68,7 +71,7 @@ class PeerNetwork {
   std::vector<std::string> GetConnectedPeers() const;
 
   // Calculate average offset from peers
-  float CalculateAverageOffset() const;
+  float CalculateAverageOffset();
 
   // Get the average offset from peers
   float GetAverageOffset() const { return sync_clock_.GetAverageOffset(); }
@@ -97,9 +100,11 @@ class PeerNetwork {
   bool server_running_;
   int server_port_;
 
-  // Peer connections
-  std::map<std::string, std::unique_ptr<client::ClientHandler::Stub>>
-      peer_stubs_;
+  // Peer service interface for making peer requests
+  std::unique_ptr<music262::PeerServiceInterface> peer_service_;
+
+  // Connected peers
+  std::vector<std::string> connected_peers_;
   mutable std::mutex peers_mutex_;
 
   // Sync clock for time synchronization
