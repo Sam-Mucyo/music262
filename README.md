@@ -6,6 +6,14 @@ A decentralized, peer-based distributed system where multiple machines can colla
 
 ![System Architecture](./docs/images/hld_diagram.png)
 
+## Features
+
+- **Audio Streaming**: Server streams audio files to clients
+- **Terminal Client**: Command-line interface for audio playback and peer control
+- **GUI Client**: Graphical interface for intuitive control of audio playback and peer management
+- **Peer Synchronization**: Clients can connect directly to each other to synchronize audio playback
+- **Peer Discovery**: Server facilitates client discovery in the network
+
 ## Principles from Distributed Systems
 
 - Client-server communication using gRPC and Protocol Buffers

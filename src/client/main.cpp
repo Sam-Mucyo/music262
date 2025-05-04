@@ -77,6 +77,17 @@ int main(int argc, char** argv) {
   // Enable peer sync by default
   client.EnablePeerSync(true);
 
+  // Fetch and display playlist at startup
+  std::vector<std::string> playlist = client.GetPlaylist();
+  std::cout << "\nAvailable songs:" << std::endl;
+  if (playlist.empty()) {
+    std::cout << "No songs available on the server." << std::endl;
+  } else {
+    for (size_t i = 0; i < playlist.size(); i++) {
+      std::cout << i + 1 << ". " << playlist[i] << std::endl;
+    }
+  }
+
   bool running = true;
   std::string command;
 
