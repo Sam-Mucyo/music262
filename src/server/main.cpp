@@ -73,6 +73,10 @@ class AudioServiceImpl final : public audio_service::audio_service::Service {
                            audio_service::PlaylistResponse* response) override {
     LOG_INFO("Received playlist request from client");
 
+    // Register client in the connected clients list
+    std::string client_ip = context->peer();
+    RegisterClient(client_ip);
+
     // Add each song filename to the response
     for (const auto& song : playlist_) {
       response->add_song_names(song);
@@ -107,12 +111,7 @@ class AudioServiceImpl final : public audio_service::audio_service::Service {
 
     // Register client in the connected clients list
     std::string client_ip = context->peer();
-    {
-      std::lock_guard<std::mutex> lock(clients_mutex_);
-      connected_clients_[next_client_id_] = client_ip;
-      next_client_id_++;
-      LOG_INFO("Client connected: {}", client_ip);
-    }
+    RegisterClient(client_ip);
 
     // Read and send the file in chunks
     constexpr size_t CHUNK_SIZE = 64 * 1024;  // 64 KB chunks
@@ -139,20 +138,20 @@ class AudioServiceImpl final : public audio_service::audio_service::Service {
     LOG_INFO("Sent {} bytes of audio data for song: {}", total_bytes_sent,
              song_name);
 
-    // Clean up the client when the stream is done
-    {
-      std::lock_guard<std::mutex> lock(clients_mutex_);
-      for (auto it = connected_clients_.begin();
-           it != connected_clients_.end();) {
-        if (it->second == client_ip) {
-          it = connected_clients_.erase(it);
-        } else {
-          ++it;
-        }
-      }
-    }
-
     return grpc::Status::OK;
+  }
+
+  // Helper function to extract clean IP:port from gRPC peer string
+  std::string ExtractIPFromPeer(const std::string& peer) {
+    // gRPC peer strings are typically in format "ipv4:127.0.0.1:12345" or
+    // "ipv6:[::1]:12345"
+    size_t colon_pos = peer.find(':');
+    if (colon_pos != std::string::npos) {
+      // Skip the prefix (e.g., "ipv4:" or "ipv6:")
+      std::string address = peer.substr(colon_pos + 1);
+      return address;
+    }
+    return peer;  // Return original if format is unexpected
   }
 
   grpc::Status GetPeerClientIPs(
@@ -161,12 +160,17 @@ class AudioServiceImpl final : public audio_service::audio_service::Service {
       audio_service::PeerListResponse* response) override {
     LOG_INFO("Received peer list request");
 
+    // Register the requesting client
+    std::string requester_ip = context->peer();
+    std::string clean_requester_ip = ExtractIPFromPeer(requester_ip);
+    RegisterClient(requester_ip);
+
     std::lock_guard<std::mutex> lock(clients_mutex_);
 
     // Return all connected clients except the requester
-    std::string requester_ip = context->peer();
     for (const auto& [id, ip] : connected_clients_) {
-      if (ip != requester_ip) {
+      if (ip != clean_requester_ip) {
+        // IPs are already clean in the connected_clients_ map
         response->add_client_ips(ip);
       }
     }
@@ -191,6 +195,26 @@ class AudioServiceImpl final : public audio_service::audio_service::Service {
   }
 
  private:
+  // Helper function to register a client in the connected clients list
+  void RegisterClient(const std::string& client_ip) {
+    std::lock_guard<std::mutex> lock(clients_mutex_);
+
+    // Clean up the IP address by extracting and decoding it
+    std::string clean_ip = ExtractIPFromPeer(client_ip);
+
+    // Check if this client is already registered
+    for (const auto& [id, ip] : connected_clients_) {
+      if (ip == clean_ip) {
+        return;  // Client already registered
+      }
+    }
+
+    // Register new client with the clean IP
+    connected_clients_[next_client_id_] = clean_ip;
+    next_client_id_++;
+    LOG_INFO("Client connected: {} (raw: {})", clean_ip, client_ip);
+  }
+
   std::string audio_directory_;
   std::vector<std::string> playlist_;
 

@@ -165,3 +165,26 @@ void AudioClient::SetPeerNetwork(std::shared_ptr<PeerNetwork> peer_network) {
   peer_network_ = peer_network;
   LOG_DEBUG("Peer network set");
 }
+
+bool AudioClient::IsServerConnected() {
+  LOG_DEBUG("Verifying server connection");
+
+  // Try to get the playlist as a simple way to check if server is responsive
+  PlaylistRequest request;
+  PlaylistResponse response;
+  ClientContext context;
+
+  // Set a deadline for the RPC
+  context.set_deadline(std::chrono::system_clock::now() +
+                       std::chrono::seconds(2));
+
+  Status status = stub_->GetPlaylist(&context, request, &response);
+
+  if (status.ok()) {
+    LOG_INFO("Server connection successful");
+    return true;
+  } else {
+    LOG_ERROR("Failed to connect to server: {}", status.error_message());
+    return false;
+  }
+}

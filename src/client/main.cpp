@@ -50,6 +50,15 @@ int main(int argc, char** argv) {
   AudioClient client(
       grpc::CreateChannel(server_address, grpc::InsecureChannelCredentials()));
 
+  // Verify server connection and display status to the user
+  if (client.IsServerConnected()) {
+    std::cout << "Successfully connected to server at " << server_address
+              << std::endl;
+  } else {
+    std::cout << "Failed to connect to server at " << server_address
+              << ". Some functionality may be limited." << std::endl;
+  }
+
   // Create peer network and start P2P server automatically
   auto peer_network = std::make_shared<PeerNetwork>(&client);
   client.SetPeerNetwork(peer_network);
