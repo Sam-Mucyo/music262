@@ -12,26 +12,34 @@ This updated version of the application has support for macOS only, with streami
 - Protobuf library
 - gRPC library
 - spdlog library
-- Qt5 (for the GUI client)
+- Qt5 (optional, only required for the GUI client)
 
 ### Installing Dependencies (macOS)
 
 You can install the required dependencies using Homebrew:
 
 ```bash
-brew install cmake protobuf grpc spdlog qt@5
+# Core dependencies
+brew install cmake protobuf grpc spdlog
+
+# Optional: Qt5 (only needed for GUI client)
+brew install qt@5
 ```
 
 ### Building the Application
 
 From root directory, run:
 ```bash
+# Build everything (including GUI client if Qt5 is available)
 cmake -B build -S . && cmake --build build
+
+# Build without the GUI client
+cmake -B build -S . -DBUILD_GUI=OFF && cmake --build build
 ```
 
 The build process will automatically format the code according to style guidelines.
 
-After successful build, the executables will be in the `build/bin` directory.
+After successful build, the executables will be in the `build/bin` directory. If you built with `-DBUILD_GUI=OFF`, the `music_client_gui` executable will not be available.
 
 ### Developer setup (optional)
 
@@ -119,29 +127,6 @@ The GUI client provides the same functionality as the terminal client but with a
 - Gossip peer connections to all peers
 - View synchronization offsets
 
-## Sample Workflow
-
-### Terminal Client Workflow
-
-1. Start the server
-2. Start one or more terminal clients
-3. Use the `playlist` command to see available songs
-4. Use `play <song_num>` to play a song
-5. Use playback controls (pause/resume/stop)
-6. Use `peers` to discover other clients
-7. Use `join <ip:port>` to connect to other clients for synchronized playback
-
-### GUI Client Workflow
-
-1. Start the server
-2. Start the GUI client(s)
-3. Songs are automatically displayed in the Playback tab
-4. Select a song and click Play to start playback
-5. Use the control buttons for playback management
-6. Switch to the Peer Network tab to view and connect to other clients
-7. Enter peer addresses to join or select connected peers to leave
-
-The server streams the audio file to the client, which stores it in memory and plays it locally.
 
 ### Unit Tests
 

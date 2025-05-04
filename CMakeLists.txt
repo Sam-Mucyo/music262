@@ -1,8 +1,14 @@
 cmake_minimum_required(VERSION 3.14)
 
 # ──────────────────────────────────────────────────────────────────────────────
-# macOS deployment and Homebrew Qt5 settings
-if(APPLE)
+# Options
+option(BUILD_TESTS "Build test programs" ON)
+option(BUILD_DOCS "Build documentation" ON)
+option(ENABLE_FORMATTING "Enable code formatting" ON)
+option(BUILD_GUI "Build the GUI client" ON)
+
+# macOS deployment and Homebrew Qt5 settings (only when GUI is enabled)
+if(APPLE AND BUILD_GUI)
   # Use C++17 filesystem features in Qt headers
   set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "" FORCE)
 
@@ -42,10 +48,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
-# Options
-option(BUILD_TESTS "Build test programs" ON)
-option(BUILD_DOCS "Build documentation" ON)
-option(ENABLE_FORMATTING "Enable code formatting" ON)
+# These options are now defined earlier in the file
 
 # Include directories
 include_directories(
