@@ -31,10 +31,12 @@ class MainWindow : public QMainWindow {
 
  private slots:
   // Playback control slots
-  void onPlaySelected();
-  void onPauseClicked();
-  void onResumeClicked();
+  void onPlayPauseClicked();
   void onStopClicked();
+
+  // Helper methods for playback
+  void playSelectedSong();
+  void updatePlayPauseButton();
 
   // Peer connection slots
   void onRefreshPeersClicked();
@@ -70,13 +72,16 @@ class MainWindow : public QMainWindow {
   // Playback tab
   QWidget* playbackTab_;
   QListWidget* playlistWidget_;
-  QPushButton* playButton_;
-  QPushButton* pauseButton_;
-  QPushButton* resumeButton_;
+  QPushButton* playPauseButton_;  // Combined play/pause/resume button
   QPushButton* stopButton_;
   QSlider* positionSlider_;
   QLabel* positionLabel_;
   QLabel* durationLabel_;
+  QLabel* nowPlayingLabel_;
+
+  // Playback state tracking
+  enum PlaybackState { Stopped, Playing, Paused };
+  PlaybackState playbackState_;
 
   // Peers tab
   QWidget* peersTab_;
