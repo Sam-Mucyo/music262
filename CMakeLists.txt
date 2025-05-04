@@ -1,15 +1,14 @@
 cmake_minimum_required(VERSION 3.14)
 
 # ──────────────────────────────────────────────────────────────────────────────
-# macOS deployment target (so std::filesystem is available in Qt headers)
+# macOS deployment and Homebrew Qt5 settings
 if(APPLE)
+  # Use C++17 filesystem features in Qt headers
   set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "" FORCE)
-endif()
 
-# Homebrew’s Qt5 is “keg-only,” so point CMake to its cmake modules
-if(APPLE)
-  set(CMAKE_PREFIX_PATH "/opt/homebrew/opt/qt@5/lib/cmake"
-      CACHE PATH "Qt5 install prefix from Homebrew" FORCE)
+  # Point CMake at Homebrew’s keg-only Qt5 install
+  set(CMAKE_PREFIX_PATH "/opt/homebrew/opt/qt@5" CACHE PATH "Homebrew Qt5 prefix" FORCE)
+  set(Qt5_DIR "/opt/homebrew/opt/qt@5/lib/cmake/Qt5" CACHE PATH "Qt5Config.cmake directory" FORCE)
 endif()
 # ──────────────────────────────────────────────────────────────────────────────
 
