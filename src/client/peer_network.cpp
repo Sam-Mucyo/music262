@@ -133,8 +133,7 @@ grpc::Status PeerService::SendMusicCommand(grpc::ServerContext* context,
       // Reset to broadcaster's position to prevent drift
       client->GetPlayer().set_position(position);
       client->Resume();
-    }
-    else if (action == "stop")
+    } else if (action == "stop")
       client->Stop();
     else
       LOG_WARN("Unknown command from peer: {}", action);
@@ -152,12 +151,27 @@ grpc::Status PeerService::GetPosition(grpc::ServerContext* context,
     return grpc::Status(grpc::StatusCode::INTERNAL, "Client not initialized");
   }
 
-  unsigned int position = client_->GetPosition();
+  unsigned int position = client_->GetPlayer().get_position();
   response->set_position(position);
 
   LOG_DEBUG("Position request from peer {}, current position: {}",
             context->peer(), position);
 
+  return grpc::Status::OK;
+}
+
+grpc::Status PeerService::Exit(grpc::ServerContext* context,
+                               const client::ExitRequest* request,
+                               client::ExitResponse* response) {
+  std::string peer = context->peer();
+  // strip protocol prefix (ipv4: or ipv6:)
+  if (peer.rfind("ipv4:", 0) == 0 || peer.rfind("ipv6:", 0) == 0)
+    peer = peer.substr(peer.find(':') + 1);
+  auto network = client_->GetPeerNetwork();
+  if (network) {
+    network->DisconnectFromPeer(peer);
+    LOG_INFO("Removed peer {} on Exit notification", peer);
+  }
   return grpc::Status::OK;
 }
 
@@ -169,6 +183,8 @@ PeerNetwork::PeerNetwork(AudioClient* client)
 
 PeerNetwork::~PeerNetwork() {
   LOG_DEBUG("PeerNetwork shutting down");
+  // Notify peers that we are exiting
+  BroadcastExit();
   StopServer();
   DisconnectFromAllPeers();
 }
@@ -307,7 +323,7 @@ std::vector<std::string> PeerNetwork::GetConnectedPeers() const {
   return peers;
 }
 
-float PeerNetwork::CalculateAverageOffset() const {
+float PeerNetwork::CalculateAverageOffset() {
   std::lock_guard<std::mutex> lock(peers_mutex_);
 
   if (peer_stubs_.empty()) {
@@ -316,6 +332,7 @@ float PeerNetwork::CalculateAverageOffset() const {
   }
 
   std::vector<float> offsets;
+  std::vector<std::string> to_remove;  // peers to remove on failure
   float max_rtt = 0.0f;
   int successful_pings = 0;
 
@@ -342,6 +359,7 @@ float PeerNetwork::CalculateAverageOffset() const {
       auto status = entry.second->Ping(&context, request, &response);
 
       if (!status.ok()) {
+        to_remove.push_back(entry.first);
         LOG_ERROR("Failed to get offset from peer {}: {}", entry.first,
                   status.error_message());
         break;
@@ -390,6 +408,12 @@ float PeerNetwork::CalculateAverageOffset() const {
 
   LOG_INFO("Calculated network average offset: {} ns, max RTT: {} ns",
            new_avg_offset, max_rtt);
+
+  // Remove any peers that failed health checks
+  for (const auto& dead : to_remove) {
+    peer_stubs_.erase(dead);
+    LOG_INFO("Removed dead peer {}", dead);
+  }
 
   return new_avg_offset;
 }
@@ -460,6 +484,8 @@ bool PeerNetwork::BroadcastLoad(int song_num) {
     auto status = it->second->SendMusicCommand(&ctx, req, &resp);
     if (!status.ok()) {
       LOG_ERROR("Failed load to {}: {}", peer, status.error_message());
+      peer_stubs_.erase(peer);
+      LOG_INFO("Removed dead peer {}", peer);
     } else {
       success++;
     }
@@ -521,6 +547,8 @@ void PeerNetwork::BroadcastCommand(const std::string& action, int position) {
       if (!status.ok()) {
         LOG_ERROR("Failed to send command to peer {}: {}", peer_address,
                   status.error_message());
+        peer_stubs_.erase(peer_address);
+        LOG_INFO("Removed dead peer {}", peer_address);
       } else {
         LOG_INFO("Sent music command to {}", peer_address);
       }
@@ -530,4 +558,27 @@ void PeerNetwork::BroadcastCommand(const std::string& action, int position) {
            peer_list.size(), wait_ms);
   // Sleep locally for the same delay
   std::this_thread::sleep_for(std::chrono::milliseconds(wait_ms));
+}
+
+bool PeerNetwork::BroadcastExit() {
+  std::vector<std::string> peers;
+  {
+    std::lock_guard<std::mutex> lock(peers_mutex_);
+    for (auto& entry : peer_stubs_) peers.push_back(entry.first);
+  }
+  for (const auto& peer : peers) {
+    grpc::ClientContext ctx;
+    client::ExitRequest req;
+    client::ExitResponse resp;
+    ctx.set_deadline(std::chrono::system_clock::now() +
+                     std::chrono::seconds(1));
+    auto it = peer_stubs_.find(peer);
+    if (it == peer_stubs_.end()) continue;
+    auto status = it->second->Exit(&ctx, req, &resp);
+    if (!status.ok()) {
+      LOG_ERROR("Failed to send Exit to peer {}: {}", peer,
+                status.error_message());
+    }
+  }
+  return true;
 }
