@@ -54,7 +54,7 @@ Our goal was to build a robust, reasonably performant system while using CS262 c
 ## Initial System Architecture
 
 
-![Initial System Architecture Diagram](images/hld_diagram.png)
+![Initial System Architecture Diagram](hld_diagram.png)
 
 We were thinking:
 
@@ -157,7 +157,7 @@ With the foundational elements of server-client communication (Part 3) and basic
 
 We considered three main architectural patterns for handling the real-time synchronization commands (play, pause, seek):
 
-![Synchronization Topology Comparison](images/topologies.png)
+![Synchronization Topology Comparison](topologies.png)
 
 1.  **Central Coordinator (Star Topology):** In this model, the existing server would act as the central timing authority. It would maintain a connection (e.g., a bidirectional gRPC stream) to every client and issue precise commands like "start playing track X at position Y exactly at time T".
     *   *Pros:* Clients remain relatively simple ("pure clients"), as they only need to listen for commands from the server and don't require their own listening ports for peer communication.
