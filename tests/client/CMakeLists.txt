@@ -20,6 +20,27 @@ add_module_test(
     ${CMAKE_SOURCE_DIR}/src/client/audioplayer.cpp
 )
 
+# SyncClock tests
+add_module_test(
+    sync_clock_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/sync_clock_test.cpp
+    ${CMAKE_SOURCE_DIR}/src/client/sync_clock.cpp
+)
+
+# Add include paths for the SyncClock test
+target_include_directories(sync_clock_test PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/client
+    ${CMAKE_SOURCE_DIR}/src/client/include
+    ${CMAKE_SOURCE_DIR}/src/common/include
+    ${CMAKE_BINARY_DIR}/src/proto
+)
+
+# Link against needed libraries
+target_link_libraries(sync_clock_test PRIVATE
+    common
+    proto_lib
+)
+
 # Add more client tests here as needed
 # Example:
 # add_module_test(

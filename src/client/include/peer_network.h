@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "audio_sync.grpc.pb.h"
+#include "sync_clock.h"
 
 // Forward declaration
 class AudioClient;
@@ -24,8 +25,8 @@ class PeerService final : public client::ClientHandler::Service {
                     client::PingResponse* response) override;
 
   grpc::Status Gossip(grpc::ServerContext* context,
-                    const client::GossipRequest* request,
-                    client::GossipResponse* response) override;
+                      const client::GossipRequest* request,
+                      client::GossipResponse* response) override;
 
   grpc::Status SendMusicCommand(grpc::ServerContext* context,
                                 const client::MusicRequest* request,
@@ -70,13 +71,20 @@ class PeerNetwork {
   float CalculateAverageOffset() const;
 
   // Get the average offset from peers
-  float GetAverageOffset() const { return avg_offset_; }
+  float GetAverageOffset() const { return sync_clock_.GetAverageOffset(); }
 
   // Broadcast a command to all connected peers
   void BroadcastCommand(const std::string& action, int position);
 
   // Broadcast gossip to all connected peers
   void BroadcastGossip();
+
+  // Broadcast a load command synchronously and wait for all peers to load
+  bool BroadcastLoad(int song_num);
+
+  // Get the sync clock instance
+  SyncClock& GetSyncClock() { return sync_clock_; }
+  const SyncClock& GetSyncClock() const { return sync_clock_; }
 
  private:
   // Main client reference
@@ -93,6 +101,7 @@ class PeerNetwork {
   std::map<std::string, std::unique_ptr<client::ClientHandler::Stub>>
       peer_stubs_;
   mutable std::mutex peers_mutex_;
-  mutable float rtt_;  // Maximum round-trip time for ping
-  mutable float avg_offset_;  // Average offset from peers
+
+  // Sync clock for time synchronization
+  SyncClock sync_clock_;
 };

@@ -144,9 +144,7 @@ int main(int argc, char** argv) {
       }
       float average_offset = peer_network->GetAverageOffset();
       if (average_offset > 0) {
-        std::cout << "Average offset: "
-                  << average_offset << " ns"
-                  << std::endl;
+        std::cout << "Average offset: " << average_offset << " ns" << std::endl;
       } else {
         std::cout << "Average offset: NA" << std::endl;
       }

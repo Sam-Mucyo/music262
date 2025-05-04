@@ -14,7 +14,8 @@ AudioClient::AudioClient(std::shared_ptr<Channel> channel)
     : stub_(audio_service::audio_service::NewStub(channel)),
       player_(),
       peer_sync_enabled_(false),
-      command_from_broadcast_(false) {
+      command_from_broadcast_(false),
+      current_song_num_(-1) {
   LOG_DEBUG("AudioClient initialized");
 }
 
@@ -76,7 +77,8 @@ bool AudioClient::LoadAudio(int song_num) {
       LOG_ERROR("Failed to load audio data into player");
       return false;
     }
-
+    // Track loaded song for sync
+    current_song_num_ = song_num;
     return true;
   } else {
     LOG_ERROR("LoadAudio RPC failed: {}", status.error_message());
@@ -85,17 +87,18 @@ bool AudioClient::LoadAudio(int song_num) {
 }
 
 void AudioClient::Play() {
-  // Broadcast command to peers if enabled and not from broadcast
+  // Broadcast load then play to peers if sync-enabled
   if (peer_sync_enabled_ && !command_from_broadcast_ && peer_network_) {
+    if (current_song_num_ >= 0) {
+      LOG_DEBUG("Broadcasting load command to peers for song {}",
+                current_song_num_);
+      peer_network_->BroadcastLoad(current_song_num_);
+    } else {
+      LOG_WARN("No song loaded to broadcast load");
+    }
     LOG_DEBUG("Broadcasting play command to peers");
     peer_network_->BroadcastCommand("play", player_.get_position());
   }
-
-  // Wait the amount of time
-  // Wait the amount of time
-  int wait_time = peer_network_->GetConnectedPeers().size() * 10;
-  std::this_thread::sleep_for(std::chrono::nanoseconds(wait_time));
-  LOG_INFO("Playing audio after {} ns", wait_time);
   player_.play();
 }
 
@@ -104,12 +107,8 @@ void AudioClient::Pause() {
   if (peer_sync_enabled_ && !command_from_broadcast_ && peer_network_) {
     LOG_DEBUG("Broadcasting pause command to peers");
     peer_network_->BroadcastCommand("pause", player_.get_position());
+    // BroadcastCommand now handles synchronization timing internally
   }
-
-  // Wait the amount of time
-  int wait_time = peer_network_->GetConnectedPeers().size() * 10;
-  std::this_thread::sleep_for(std::chrono::nanoseconds(wait_time));
-  LOG_INFO("Pausing audio");
   player_.pause();
 }
 
@@ -118,12 +117,8 @@ void AudioClient::Resume() {
   if (peer_sync_enabled_ && !command_from_broadcast_ && peer_network_) {
     LOG_DEBUG("Broadcasting resume command to peers");
     peer_network_->BroadcastCommand("resume", player_.get_position());
+    // BroadcastCommand now handles synchronization timing internally
   }
-
-  // Wait the amount of time
-  int wait_time = peer_network_->GetConnectedPeers().size() * 10;
-  std::this_thread::sleep_for(std::chrono::nanoseconds(wait_time));
-  LOG_INFO("Resuming audio");
   player_.resume();
 }
 
@@ -132,12 +127,8 @@ void AudioClient::Stop() {
   if (peer_sync_enabled_ && !command_from_broadcast_ && peer_network_) {
     LOG_DEBUG("Broadcasting stop command to peers");
     peer_network_->BroadcastCommand("stop", 0);
+    // BroadcastCommand now handles synchronization timing internally
   }
-
-  // Wait the amount of time
-  int wait_time = peer_network_->GetConnectedPeers().size() * 10;
-  std::this_thread::sleep_for(std::chrono::nanoseconds(wait_time));
-  LOG_INFO("Stopping audio");
   player_.stop();
 }
 
