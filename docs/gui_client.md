@@ -2,33 +2,25 @@
 
 The GUI client provides an intuitive graphical interface for all the functionality available in the terminal client, making it easier to manage playback and peer connections.
 
-## Overview
-
 The GUI client is organized into tabs for different functions:
 
 1. **Playback Tab**: View and control audio playback
 2. **Peer Network Tab**: Manage peer connections for synchronized playback
 
-A status bar at the bottom of the window shows server and P2P connection status.
-
 ## Playback Tab
 
-![Playback Tab Screenshot](images/gui_playback_tab.png)
+![Playback Tab Gif](./images/playback_tab.gif)
 
 The Playback tab includes:
 
 - **Song List**: Shows all available songs from the server
-- **Playback Controls**:
-  - **Play**: Loads and plays the selected song
-  - **Pause**: Pauses the currently playing song
-  - **Resume**: Resumes a paused song
-  - **Stop**: Stops playback and resets position
-- **Position Slider**: Shows current playback position and allows seeking
+- **Playback Controls**: play, pause, resume commands based on playback status
+- **Position Slider**: Shows current playback position (future iteration can allow seeking)
 - **Time Display**: Shows current position and song duration
 
 ## Peer Network Tab
 
-![Peer Network Tab Screenshot](images/gui_peer_tab.png)
+![Peer Network Tab Screenshot](./images/peer_configs-tab.png)
 
 The Peer Network tab includes:
 
