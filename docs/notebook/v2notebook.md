@@ -54,7 +54,7 @@ Our goal was to build a robust, reasonably performant system while using CS262 c
 ## Initial System Architecture
 
 
-![Initial System Architecture Diagram](docs/images/hld_diagram.png)
+![Initial System Architecture Diagram](images/hld_diagram.png)
 
 We were thinking:
 
@@ -157,7 +157,7 @@ With the foundational elements of server-client communication (Part 3) and basic
 
 We considered three main architectural patterns for handling the real-time synchronization commands (play, pause, seek):
 
-![Synchronization Topology Comparison](docs/images/topologies.png)
+![Synchronization Topology Comparison](images/topologies.png)
 
 1.  **Central Coordinator (Star Topology):** In this model, the existing server would act as the central timing authority. It would maintain a connection (e.g., a bidirectional gRPC stream) to every client and issue precise commands like "start playing track X at position Y exactly at time T".
     *   *Pros:* Clients remain relatively simple ("pure clients"), as they only need to listen for commands from the server and don't require their own listening ports for peer communication.
@@ -227,7 +227,7 @@ void PeerNetwork::BroadcastPlayCommand(int64_t position) {
 Realizing the flaws, we introduced artificial delays around May 1/2. The initiator would still broadcast sequentially, but it would calculate a small `wait_time` for each peer, increasing slightly for each subsequent peer in the broadcast loop. The idea was to stagger the start times, hoping to compensate for the sequential broadcast delay.
 
 ```cpp
-// Conceptual code with simple delay (based on pasted_content_2.txt)
+// Conceptual code with simple delay
 void PeerNetwork::BroadcastPlayCommand(int64_t position) {
     MusicCommand command;
     // ... set action, position ...
@@ -252,7 +252,7 @@ void PeerNetwork::BroadcastPlayCommand(int64_t position) {
 
 ## Problem: gRPC Deadlines and Sequential Bottlenecks
 
-As we tested with more peers (around 4+), we started hitting gRPC `deadline exceeded` errors (`pasted_content_3.txt`). The root causes were:
+As we tested with more peers (around 4+), we started hitting gRPC `deadline exceeded` errors. The root causes were:
 
 1.  **Sequential Broadcasting:** Sending commands one by one in a loop meant the total time taken scaled linearly with the number of peers. If each RPC call took even a fraction of a second (including network latency and processing), broadcasting to many peers could easily exceed the default gRPC deadline (often 1 second).
 2.  **Expensive Pre-computation (Initially):** At one point, we considered recalculating network timing (latency) before *every* broadcast, involving multiple pings per peer. This added significant overhead before the time-sensitive play command could even be sent.
@@ -341,7 +341,7 @@ To address these problems, we did a few things:
 4. To manage the creation of the `AudioClient` and its dependencies, we introduced a factory function (`client_factory.cpp`). This centralizes the object graph construction, making it clear how components are wired together.
 
     ```cpp
-    // Conceptual Factory Function (based on pasted_content.txt)
+    // Conceptual Factory Function
     std::unique_ptr<AudioClient> CreateAudioClient(const std::string& server_address, /* other params */) {
         // Create concrete service implementations (using gRPC)
         auto audio_service = std::make_unique<GrpcAudioService>(server_address);
