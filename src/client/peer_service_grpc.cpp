@@ -157,6 +157,35 @@ class GrpcPeerService : public PeerServiceInterface {
     }
   }
 
+  bool Exit(const std::string& peer_address) override {
+    LOG_DEBUG("Sending exit notification to peer: {}", peer_address);
+
+    auto stub = GetOrCreateStub(peer_address);
+    if (!stub) {
+      return false;
+    }
+
+    client::ExitRequest request;
+    client::ExitResponse response;
+    ClientContext context;
+
+    // Set a short deadline
+    context.set_deadline(std::chrono::system_clock::now() +
+                         std::chrono::milliseconds(500));
+
+    Status status = stub->Exit(&context, request, &response);
+
+    if (status.ok()) {
+      LOG_INFO("Exit notification successful to {}", peer_address);
+      return true;
+    } else {
+      LOG_ERROR("Exit notification failed to {}: {}", peer_address,
+                status.error_message());
+      RemoveStub(peer_address);
+      return false;
+    }
+  }
+
  private:
   std::shared_ptr<client::ClientHandler::Stub> GetOrCreateStub(
       const std::string& peer_address) {
