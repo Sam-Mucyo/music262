@@ -1,14 +1,8 @@
 # Music262 Server
 
-## Overview
-
 The server component acts as a central hub for music streaming and client coordination. It provides audio files to clients, maintains a registry of connected clients, and facilitates peer discovery.
 
 ## Architecture
-
-The server has a simpler architecture compared to the client, focusing on content delivery and client tracking:
-
-### Core Components
 
 #### AudioServer (`audio_server.h/audio_server.cpp`)
 
@@ -17,15 +11,6 @@ The server has a simpler architecture compared to the client, focusing on conten
 - Handles client registration and tracking
 - Provides methods to get audio file paths and playlist information
 - Maintains a list of connected clients
-
-#### gRPC Service Implementation
-
-- Implements the AudioService interface defined in the protocol buffers
-- Handles incoming client requests for:
-  - Playlist information
-  - Audio file data
-  - Client registration
-  - Peer discovery
 
 #### Main (`main.cpp`)
 

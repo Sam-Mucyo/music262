@@ -1,7 +1,5 @@
 # Music262 Client
 
-## Overview
-
 The client component provides a music player that can stream audio from the central server and synchronize playback with other clients in a peer-to-peer network.
 
 ## Architecture
@@ -61,11 +59,6 @@ The client component provides a music player that can stream audio from the cent
 The client uses two types of communication:
 
 1. **Client-Server Communication**: Uses gRPC to communicate with the central server
-
-   - Requests playlist information
-   - Loads audio data for songs
-   - Registers with the server
-   - Gets information about other connected clients
 
 2. **Peer-to-Peer Communication**: Uses gRPC for direct communication between clients
    - Synchronizes playback commands (play, pause, resume, stop)
