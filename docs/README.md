@@ -2,6 +2,12 @@
 
 This directory contains documentation for the Music262 project.
 
+## User Guides
+
+- [How To Run](../HOW_TO_RUN.md) - Instructions for building and running the application
+- [GUI Client User Guide](gui_client.md) - Guide for the graphical user interface client
+- [Peer-to-Peer Network](peer_to_peer.md) - Documentation on the peer network architecture
+
 ## Doxygen Documentation
 
 The project uses Doxygen to automatically generate API documentation from source code. The generated documentation will be available in the `docs/doxygen/html` directory.

@@ -12,25 +12,34 @@ This updated version of the application has support for macOS only, with streami
 - Protobuf library
 - gRPC library
 - spdlog library
+- Qt5 (optional, only required for the GUI client)
 
 ### Installing Dependencies (macOS)
 
 You can install the required dependencies using Homebrew:
 
 ```bash
+# Core dependencies
 brew install cmake protobuf grpc spdlog
+
+# Optional: Qt5 (only needed for GUI client)
+brew install qt@5
 ```
 
 ### Building the Application
 
 From root directory, run:
 ```bash
+# Build everything (including GUI client if Qt5 is available)
 cmake -B build -S . && cmake --build build
+
+# Build without the GUI client
+cmake -B build -S . -DBUILD_GUI=OFF && cmake --build build
 ```
 
 The build process will automatically format the code according to style guidelines.
 
-After successful build, the executables will be in the `build/bin` directory.
+After successful build, the executables will be in the `build/bin` directory. If you built with `-DBUILD_GUI=OFF`, the `music_client_gui` executable will not be available.
 
 ### Developer setup (optional)
 
@@ -38,7 +47,7 @@ If you use clangd/VS Code/Neovim for C++ language features and hate those red-un
 ```bash
 cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 ln -sf build/compile_commands.json .   # makes clangd pick it up from the repo root
-
+```
 
 ## Running the Application
 
@@ -61,7 +70,7 @@ You can also specify port and audio directory:
 ./bin/music_server --port 50051 --audio_dir ../sample_music
 ```
 
-### Client
+### Terminal Client
 
 From the build directory:
 
@@ -77,29 +86,53 @@ You can specify the server address:
 
 Client commands:
 - `playlist` - Get the list of songs available on the server
-- `play <song_name>` - Load a song from the server and play it
+- `play <song_num>` - Load and play a song by number
 - `pause` - Pause the currently playing song
 - `resume` - Resume the paused song
 - `stop` - Stop playback and reset position
 - `peers` - Show other clients connected to the server
+- `join <ip:port>` - Join a peer for synchronized playback
+- `leave <ip:port>` - Leave a connected peer
+- `connections` - List all active peer connections
+- `gossip` - Share all active peer connections with all peers
 - `help` - Show help
 - `exit` or `quit` - Exit the client
 
-## Sample Workflow
+### GUI Client
 
-1. Start the server
-2. Start one or more clients
-3. Use the `playlist` command to see available songs
-4. Use `play song_name.wav` to play a song
-5. Use playback controls (pause/resume/stop)
+From the build directory:
 
-The server streams the audio file to the client, which stores it in memory and plays it locally.
+```bash
+./bin/music_client_gui
+```
+
+You can specify the server address and P2P port:
+
+```bash
+./bin/music_client_gui --server localhost:50051 --p2p-port 50052
+```
+
+The GUI client provides the same functionality as the terminal client but with an intuitive graphical interface:
+
+#### Playback Tab
+- View and select from available songs
+- Play, pause, resume, and stop buttons
+- Position slider with time display
+- Automatic updates of playback position
+
+#### Peer Network Tab
+- View clients connected to the server
+- Connect to peers with a simple interface
+- Manage active peer connections
+- Gossip peer connections to all peers
+- View synchronization offsets
+
 
 ### Unit Tests
 
 After following build instructions:
 ```bash
-   cd build
-    ctest --output-on-failure
+cd build
+ctest --output-on-failure
 ```
 
