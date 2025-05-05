@@ -36,6 +36,9 @@ class AudioClient {
   // Stop the currently playing audio
   void Stop();
 
+  // Seek to a specific position in the audio (s)
+  void SeekTo(int position);
+
   // Get the current playback position
   unsigned int GetPosition() const;
 
@@ -65,6 +68,13 @@ class AudioClient {
   void SetCommandFromBroadcast(bool value) { command_from_broadcast_ = value; }
   bool IsCommandFromBroadcast() const { return command_from_broadcast_; }
 
+  std::string GetBroadcastAction() const {
+    return command_from_broadcast_action_;  // return by value
+  }
+  void SetCommandFromBroadcastAction(const std::string& action) {
+    command_from_broadcast_action_ = action;  // pass by const ref
+  }
+  
  private:
   std::unique_ptr<music262::AudioServiceInterface> audio_service_;
   AudioPlayer player_;
@@ -75,4 +85,5 @@ class AudioClient {
   std::shared_ptr<PeerNetwork> peer_network_;
   std::atomic<bool> peer_sync_enabled_{false};
   std::atomic<bool> command_from_broadcast_{false};
+  std::string command_from_broadcast_action_;
 };

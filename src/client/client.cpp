@@ -9,6 +9,7 @@ AudioClient::AudioClient(
       player_(),
       peer_sync_enabled_(false),
       command_from_broadcast_(false),
+      command_from_broadcast_action_(" "),
       current_song_num_(-1) {
   LOG_DEBUG("AudioClient initialized");
 }
@@ -96,6 +97,13 @@ void AudioClient::Stop() {
     // BroadcastCommand now handles synchronization timing internally
   }
   player_.stop();
+}
+
+void AudioClient::SeekTo(int seconds) {
+  const WavHeader& header = GetPlayer().get_header();
+  unsigned int bytesPerSecond = header.sampleRate * header.numChannels * (header.bitsPerSample / 8);
+  unsigned int targetByte = seconds * bytesPerSecond;
+  GetPlayer().get_position_ref().store(targetByte);
 }
 
 unsigned int AudioClient::GetPosition() const { return player_.get_position(); }
