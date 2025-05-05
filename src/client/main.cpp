@@ -1,5 +1,3 @@
-#include <grpcpp/grpcpp.h>
-
 #include <cstdlib>
 #include <iostream>
 #include <memory>
@@ -9,6 +7,11 @@
 #include "include/client.h"
 #include "include/peer_network.h"
 #include "logger.h"
+
+// Factory function to create an AudioClient with real gRPC service
+// implementations
+std::unique_ptr<AudioClient> CreateAudioClient(
+    const std::string& server_address);
 
 void PrintUsage() {
   std::cout << "Usage: \n"
@@ -45,10 +48,10 @@ int main(int argc, char** argv) {
     }
   }
 
-  // Create a channel to the server
+  // Create the client using the factory function
   LOG_INFO("Connecting to server at {}", server_address);
-  AudioClient client(
-      grpc::CreateChannel(server_address, grpc::InsecureChannelCredentials()));
+  auto client_ptr = CreateAudioClient(server_address);
+  AudioClient& client = *client_ptr;
 
   // Verify server connection and display status to the user
   if (client.IsServerConnected()) {
@@ -59,9 +62,8 @@ int main(int argc, char** argv) {
               << ". Some functionality may be limited." << std::endl;
   }
 
-  // Create peer network and start P2P server automatically
-  auto peer_network = std::make_shared<PeerNetwork>(&client);
-  client.SetPeerNetwork(peer_network);
+  // Get the peer network that was created by the factory
+  auto peer_network = client.GetPeerNetwork();
 
   // Start peer server automatically
   if (peer_network->StartServer(p2p_port)) {

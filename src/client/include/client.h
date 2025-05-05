@@ -1,26 +1,21 @@
 #pragma once
 
-#include <grpcpp/grpcpp.h>
-
 #include <atomic>
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "audio_service.grpc.pb.h"
+#include "audio_service_interface.h"
 #include "audioplayer.h"
-
-using grpc::Channel;
-using grpc::ClientContext;
-using grpc::ClientReader;
-using grpc::Status;
+#include "peer_service_interface.h"
 
 // Forward declaration
 class PeerNetwork;
 
 class AudioClient {
  public:
-  AudioClient(std::shared_ptr<Channel> channel);
+  // Constructor with service interfaces for dependency injection
+  AudioClient(std::unique_ptr<music262::AudioServiceInterface> audio_service);
   ~AudioClient();
 
   // Request the playlist from the server
@@ -71,7 +66,7 @@ class AudioClient {
   bool IsCommandFromBroadcast() const { return command_from_broadcast_; }
 
  private:
-  std::unique_ptr<audio_service::audio_service::Stub> stub_;
+  std::unique_ptr<music262::AudioServiceInterface> audio_service_;
   AudioPlayer player_;
   std::vector<char> audio_data_;
   int current_song_num_{-1};  // index of last loaded song

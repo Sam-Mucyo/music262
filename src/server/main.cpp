@@ -9,35 +9,14 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <map>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
 
 #include "../common/include/logger.h"
 #include "audio_service.grpc.pb.h"
-
-namespace fs = std::filesystem;
-
-// Get all .wav files in the given directory
-std::vector<std::string> get_audio_files(const std::string& directory) {
-  std::vector<std::string> audio_files;
-
-  if (!fs::exists(directory) || !fs::is_directory(directory)) {
-    std::cerr << "Directory does not exist: " << directory << std::endl;
-    return audio_files;
-  }
-
-  for (const auto& entry : fs::directory_iterator(directory)) {
-    if (entry.is_regular_file() && entry.path().extension() == ".wav") {
-      audio_files.push_back(entry.path().filename());
-    }
-  }
-
-  return audio_files;
-}
+#include "include/audio_server.h"
 
 // Helper: get first non-loopback IPv4 address
 std::string GetLocalIPAddress() {
@@ -59,13 +38,11 @@ std::string GetLocalIPAddress() {
 }
 
 // AudioServiceImpl class that implements the gRPC service
+// This class now delegates to the AudioServer class for business logic
 class AudioServiceImpl final : public audio_service::audio_service::Service {
  public:
-  AudioServiceImpl(const std::string& audio_dir)
-      : audio_directory_(audio_dir), next_client_id_(0) {
-    // Load the available songs on startup
-    playlist_ = get_audio_files(audio_directory_);
-    LOG_INFO("Loaded {} songs from {}", playlist_.size(), audio_directory_);
+  AudioServiceImpl(std::shared_ptr<AudioServer> server) : server_(server) {
+    LOG_INFO("AudioServiceImpl initialized");
   }
 
   grpc::Status GetPlaylist(grpc::ServerContext* context,
@@ -73,8 +50,12 @@ class AudioServiceImpl final : public audio_service::audio_service::Service {
                            audio_service::PlaylistResponse* response) override {
     LOG_INFO("Received playlist request from client");
 
+    // Register client in the connected clients list
+    std::string client_ip = context->peer();
+    server_->RegisterClient(client_ip);
+
     // Add each song filename to the response
-    for (const auto& song : playlist_) {
+    for (const auto& song : server_->GetPlaylist()) {
       response->add_song_names(song);
     }
 
@@ -88,12 +69,9 @@ class AudioServiceImpl final : public audio_service::audio_service::Service {
     int song_num = request->song_num();
     LOG_INFO("Received request to load song: {}", song_num);
 
-    std::string song_name = playlist_[song_num - 1];
-
-    // Check if the requested song exists
-    std::string file_path = audio_directory_ + "/" + song_name;
-    if (!fs::exists(file_path)) {
-      LOG_ERROR("Song file not found: {}", file_path);
+    // Get the file path from the server
+    std::string file_path = server_->GetAudioFilePath(song_num);
+    if (file_path.empty()) {
       return grpc::Status(grpc::StatusCode::NOT_FOUND, "Song not found");
     }
 
@@ -107,12 +85,7 @@ class AudioServiceImpl final : public audio_service::audio_service::Service {
 
     // Register client in the connected clients list
     std::string client_ip = context->peer();
-    {
-      std::lock_guard<std::mutex> lock(clients_mutex_);
-      connected_clients_[next_client_id_] = client_ip;
-      next_client_id_++;
-      LOG_INFO("Client connected: {}", client_ip);
-    }
+    server_->RegisterClient(client_ip);
 
     // Read and send the file in chunks
     constexpr size_t CHUNK_SIZE = 64 * 1024;  // 64 KB chunks
@@ -136,22 +109,7 @@ class AudioServiceImpl final : public audio_service::audio_service::Service {
       }
     }
 
-    LOG_INFO("Sent {} bytes of audio data for song: {}", total_bytes_sent,
-             song_name);
-
-    // Clean up the client when the stream is done
-    {
-      std::lock_guard<std::mutex> lock(clients_mutex_);
-      for (auto it = connected_clients_.begin();
-           it != connected_clients_.end();) {
-        if (it->second == client_ip) {
-          it = connected_clients_.erase(it);
-        } else {
-          ++it;
-        }
-      }
-    }
-
+    LOG_INFO("Sent {} bytes of audio data", total_bytes_sent);
     return grpc::Status::OK;
   }
 
@@ -161,43 +119,45 @@ class AudioServiceImpl final : public audio_service::audio_service::Service {
       audio_service::PeerListResponse* response) override {
     LOG_INFO("Received peer list request");
 
-    std::lock_guard<std::mutex> lock(clients_mutex_);
-
-    // Return all connected clients except the requester
+    // Register the requesting client
     std::string requester_ip = context->peer();
-    for (const auto& [id, ip] : connected_clients_) {
-      if (ip != requester_ip) {
-        response->add_client_ips(ip);
-      }
+    server_->RegisterClient(requester_ip);
+
+    // Get connected clients excluding the requester
+    std::vector<std::string> clients =
+        server_->GetConnectedClients(requester_ip);
+
+    // Add all clients to the response
+    for (const auto& client : clients) {
+      response->add_client_ips(client);
     }
 
     return grpc::Status::OK;
   }
 
-  // Get current server stats for the CLI
-  void PrintStatus() const {
-    std::cout << "Server Status:" << std::endl;
-    std::cout << "  Songs available: " << playlist_.size() << std::endl;
-
-    std::cout << "  IP Address: " << GetLocalIPAddress() << std::endl;
-    std::cout << "  Port: " << 50051 << std::endl;  // TODO: hardcoded for now
-    std::lock_guard<std::mutex> lock(clients_mutex_);
-    std::cout << "  Connected clients: " << connected_clients_.size()
-              << std::endl;
-    int i = 1;
-    for (const auto& [id, ip] : connected_clients_) {
-      std::cout << "    " << i++ << ". " << ip << std::endl;
+  // Helper function to extract clean IP:port from gRPC peer string
+  std::string ExtractIPFromPeer(const std::string& peer) {
+    // gRPC peer strings are typically in format "ipv4:127.0.0.1:12345" or
+    // "ipv6:[::1]:12345"
+    size_t colon_pos = peer.find(':');
+    if (colon_pos != std::string::npos) {
+      // Skip the prefix (e.g., "ipv4:" or "ipv6:")
+      std::string address = peer.substr(colon_pos + 1);
+      return address;
     }
+    return peer;  // Return original if format is unexpected
+  }
+
+  // Get current server stats for the CLI
+  void PrintStatus(int port) const {
+    std::string local_ip = GetLocalIPAddress();
+    if (local_ip.empty()) local_ip = "127.0.0.1";
+
+    server_->PrintStatus(local_ip, port);
   }
 
  private:
-  std::string audio_directory_;
-  std::vector<std::string> playlist_;
-
-  // Client tracking
-  std::map<int, std::string> connected_clients_;
-  int next_client_id_;
-  mutable std::mutex clients_mutex_;
+  std::shared_ptr<AudioServer> server_;
 };
 
 void displayHelp() {
@@ -244,8 +204,11 @@ int main(int argc, char* argv[]) {
   grpc::EnableDefaultHealthCheckService(true);
   grpc::reflection::InitProtoReflectionServerBuilderPlugin();
 
-  // Create the service implementation
-  AudioServiceImpl service(audio_directory);
+  // Create the AudioServer instance (business logic)
+  auto audio_server = std::make_shared<AudioServer>(audio_directory);
+
+  // Create the service implementation (networking layer)
+  AudioServiceImpl service(audio_server);
 
   // Start the gRPC server in a separate thread
   std::thread server_thread(RunServer, &service, port);
@@ -271,7 +234,7 @@ int main(int argc, char* argv[]) {
     std::getline(std::cin, command);
 
     if (command == "status") {
-      service.PrintStatus();
+      service.PrintStatus(port);
     } else if (command == "help") {
       displayHelp();
     } else if (command == "exit") {

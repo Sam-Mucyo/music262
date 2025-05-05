@@ -32,10 +32,16 @@ message GetPositionResponse {
   int32 position = 1;
 }
 
+// Notification for peer exit
+message ExitRequest {}
+message ExitResponse {}
+
 // Define the service
 service ClientHandler {
   rpc Gossip(GossipRequest) returns (GossipResponse);
   rpc Ping(PingRequest) returns (PingResponse);
   rpc SendMusicCommand(MusicRequest) returns (MusicResponse);
   rpc GetPosition(GetPositionRequest) returns (GetPositionResponse);
+  // Notify peers that this client is exiting
+  rpc Exit(ExitRequest) returns (ExitResponse);
 }

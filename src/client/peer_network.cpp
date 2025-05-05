@@ -151,7 +151,7 @@ grpc::Status PeerService::GetPosition(grpc::ServerContext* context,
     return grpc::Status(grpc::StatusCode::INTERNAL, "Client not initialized");
   }
 
-  unsigned int position = client_->GetPosition();
+  unsigned int position = client_->GetPlayer().get_position();
   response->set_position(position);
 
   LOG_DEBUG("Position request from peer {}, current position: {}",
@@ -160,14 +160,39 @@ grpc::Status PeerService::GetPosition(grpc::ServerContext* context,
   return grpc::Status::OK;
 }
 
+grpc::Status PeerService::Exit(grpc::ServerContext* context,
+                               const client::ExitRequest* request,
+                               client::ExitResponse* response) {
+  std::string peer = context->peer();
+  // strip protocol prefix (ipv4: or ipv6:)
+  if (peer.rfind("ipv4:", 0) == 0 || peer.rfind("ipv6:", 0) == 0)
+    peer = peer.substr(peer.find(':') + 1);
+  auto network = client_->GetPeerNetwork();
+  if (network) {
+    network->DisconnectFromPeer(peer);
+    LOG_INFO("Removed peer {} on Exit notification", peer);
+  }
+  return grpc::Status::OK;
+}
+
 // PeerNetwork implementation
-PeerNetwork::PeerNetwork(AudioClient* client)
-    : client_(client), server_running_(false), server_port_(50052) {
+PeerNetwork::PeerNetwork(
+    AudioClient* client,
+    std::unique_ptr<music262::PeerServiceInterface> peer_service)
+    : client_(client),
+      server_(nullptr),
+      service_(nullptr),
+      server_running_(false),
+      server_port_(0),
+      peer_service_(peer_service ? std::move(peer_service)
+                                 : music262::CreatePeerService()) {
   LOG_DEBUG("PeerNetwork initialized");
 }
 
 PeerNetwork::~PeerNetwork() {
   LOG_DEBUG("PeerNetwork shutting down");
+  // Notify peers that we are exiting
+  BroadcastExit();
   StopServer();
   DisconnectFromAllPeers();
 }
@@ -229,240 +254,196 @@ void PeerNetwork::StopServer() {
 }
 
 bool PeerNetwork::ConnectToPeer(const std::string& peer_address) {
-  std::lock_guard<std::mutex> lock(peers_mutex_);
+  LOG_INFO("Connecting to peer: {}", peer_address);
 
   // Check if already connected
-  if (peer_stubs_.find(peer_address) != peer_stubs_.end()) {
-    LOG_INFO("Already connected to peer: {}", peer_address);
-    return true;
+  {
+    std::lock_guard<std::mutex> lock(peers_mutex_);
+    auto it = std::find(connected_peers_.begin(), connected_peers_.end(),
+                        peer_address);
+    if (it != connected_peers_.end()) {
+      LOG_INFO("Already connected to peer: {}", peer_address);
+      return true;
+    }
   }
 
-  LOG_INFO("Attempting to connect to peer: {}", peer_address);
-
-  // Create channel
-  auto channel =
-      grpc::CreateChannel(peer_address, grpc::InsecureChannelCredentials());
-  auto stub = client::ClientHandler::NewStub(channel);
-
-  // Test connection with ping
-  client::PingRequest ping_request;
-  client::PingResponse ping_response;
-  grpc::ClientContext context;
-  context.set_deadline(std::chrono::system_clock::now() +
-                       std::chrono::seconds(5));
-
-  LOG_DEBUG("Sending ping to peer {}", peer_address);
-  auto status = stub->Ping(&context, ping_request, &ping_response);
-
-  if (!status.ok()) {
-    LOG_ERROR("Failed to connect to peer {}: {}", peer_address,
-              status.error_message());
+  // Test the connection with a ping
+  int64_t t1 = 0, t2 = 0;
+  if (!peer_service_->Ping(peer_address, t1, t2)) {
+    LOG_ERROR("Failed to connect to peer {}", peer_address);
     return false;
   }
 
-  // Store the connection
-  peer_stubs_[peer_address] = std::move(stub);
-  LOG_INFO("Successfully connected to peer: {}", peer_address);
+  // Store the peer address
+  {
+    std::lock_guard<std::mutex> lock(peers_mutex_);
+    connected_peers_.push_back(peer_address);
+    LOG_INFO("Connected to peer: {}", peer_address);
+  }
 
   return true;
 }
 
 bool PeerNetwork::DisconnectFromPeer(const std::string& peer_address) {
-  std::lock_guard<std::mutex> lock(peers_mutex_);
+  LOG_INFO("Disconnecting from peer: {}", peer_address);
 
-  auto it = peer_stubs_.find(peer_address);
-  if (it == peer_stubs_.end()) {
-    LOG_WARN("Cannot disconnect: not connected to peer {}", peer_address);
-    return false;
+  std::lock_guard<std::mutex> lock(peers_mutex_);
+  auto it =
+      std::find(connected_peers_.begin(), connected_peers_.end(), peer_address);
+  if (it != connected_peers_.end()) {
+    connected_peers_.erase(it);
+    LOG_INFO("Disconnected from peer: {}", peer_address);
+    return true;
   }
 
-  peer_stubs_.erase(it);
-  LOG_INFO("Disconnected from peer: {}", peer_address);
-
-  return true;
+  LOG_WARN("Peer not found: {}", peer_address);
+  return false;
 }
 
 void PeerNetwork::DisconnectFromAllPeers() {
-  std::lock_guard<std::mutex> lock(peers_mutex_);
+  LOG_INFO("Disconnecting from all peers");
 
-  size_t count = peer_stubs_.size();
-  if (count > 0) {
-    LOG_INFO("Disconnecting from {} peers", count);
-    peer_stubs_.clear();
-  } else {
-    LOG_DEBUG("No peers to disconnect from");
-  }
+  std::lock_guard<std::mutex> lock(peers_mutex_);
+  size_t count = connected_peers_.size();
+  connected_peers_.clear();
+
+  LOG_INFO("Disconnected from {} peers", count);
 }
 
 std::vector<std::string> PeerNetwork::GetConnectedPeers() const {
   std::lock_guard<std::mutex> lock(peers_mutex_);
-
-  std::vector<std::string> peers;
-  for (const auto& entry : peer_stubs_) {
-    peers.push_back(entry.first);
-  }
-
-  LOG_DEBUG("Retrieved list of {} connected peers", peers.size());
-  return peers;
+  return connected_peers_;
 }
 
-float PeerNetwork::CalculateAverageOffset() const {
-  std::lock_guard<std::mutex> lock(peers_mutex_);
-
-  if (peer_stubs_.empty()) {
-    LOG_DEBUG("No peers connected, cannot calculate average offset");
-    return 0.0f;
-  }
-
-  std::vector<float> offsets;
-  float max_rtt = 0.0f;
-  int successful_pings = 0;
-
-  // Perform multiple pings to get more accurate measurements
-  const int NUM_PINGS = 5;
-
-  for (const auto& entry : peer_stubs_) {
-    std::vector<float> peer_offsets;
-    float peer_rtt = 0.0f;
-
-    for (int i = 0; i < NUM_PINGS; i++) {
-      client::PingRequest request;
-      client::PingResponse response;
-      grpc::ClientContext context;
-
-      // Set deadline for ping request
-      context.set_deadline(std::chrono::system_clock::now() +
-                           std::chrono::seconds(1));
-
-      // Set t0 (time at client before sending request)
-      TimePointNs t0 = SyncClock::GetCurrentTimeNs();
-
-      // Send ping request
-      auto status = entry.second->Ping(&context, request, &response);
-
-      if (!status.ok()) {
-        LOG_ERROR("Failed to get offset from peer {}: {}", entry.first,
-                  status.error_message());
-        break;
-      }
-
-      // Set t3 (time at client after receiving response)
-      TimePointNs t3 = SyncClock::GetCurrentTimeNs();
-
-      // Process the ping response using SyncClock
-      auto [current_offset, current_rtt] =
-          const_cast<SyncClock&>(sync_clock_)
-              .ProcessPingResponse(t0, t3, response);
-
-      LOG_DEBUG("Ping to {}: RTT={} ns, Offset={} ns", entry.first, current_rtt,
-                current_offset);
-
-      peer_offsets.push_back(current_offset);
-      peer_rtt = std::max(peer_rtt, current_rtt);
-    }
-
-    // Average the results from multiple pings to this peer
-    if (!peer_offsets.empty()) {
-      float peer_avg_offset =
-          std::accumulate(peer_offsets.begin(), peer_offsets.end(), 0.0f) /
-          peer_offsets.size();
-      offsets.push_back(peer_avg_offset);
-      max_rtt = std::max(max_rtt, peer_rtt);
-      successful_pings++;
-
-      LOG_INFO("Average offset from peer {}: {} ns, RTT: {} ns", entry.first,
-               peer_avg_offset, peer_rtt);
-    }
-  }
-
-  if (successful_pings == 0) {
-    LOG_WARN("No successful pings to calculate offset");
-    return 0.0f;
-  }
-
-  // Set the max RTT in the sync clock
-  const_cast<SyncClock&>(sync_clock_).SetMaxRtt(max_rtt);
-
-  // Calculate and store the average offset across all peers
-  float new_avg_offset =
-      const_cast<SyncClock&>(sync_clock_).CalculateAverageOffset(offsets);
-
-  LOG_INFO("Calculated network average offset: {} ns, max RTT: {} ns",
-           new_avg_offset, max_rtt);
-
-  return new_avg_offset;
-}
-
-void PeerNetwork::BroadcastGossip() {
+float PeerNetwork::CalculateAverageOffset() {
   std::vector<std::string> peer_list;
   {
     std::lock_guard<std::mutex> lock(peers_mutex_);
-    for (const auto& entry : peer_stubs_) {
-      peer_list.push_back(entry.first);
+    if (connected_peers_.empty()) {
+      LOG_DEBUG("No peers to calculate offset with");
+      return 0.0f;
     }
+
+    // Make a copy of peer addresses to avoid holding the mutex during RPC calls
+    peer_list = connected_peers_;
   }
 
-  // Add clients to list of addresses
-  client::GossipRequest request;
-  for (const auto& peer : peer_list) {
-    request.add_peer_list(peer);
-  }
-  request.add_peer_list(GetLocalIPAddress() + ":" +
-                        std::to_string(server_port_));
+  LOG_DEBUG("Calculating average offset with {} peers", peer_list.size());
 
-  for (const auto& peer : peer_list) {
-    grpc::ClientContext context;
-    client::GossipResponse response;
+  // Collect round-trip times and clock offsets from each peer
+  std::vector<float> offsets;
+  std::vector<float> rtts;  // round-trip times in ms
 
-    {
-      std::lock_guard<std::mutex> lock(peers_mutex_);
-      auto it = peer_stubs_.find(peer);
-      if (it == peer_stubs_.end()) continue;
-      auto status = it->second->Gossip(&context, request, &response);
-      if (!status.ok()) {
-        LOG_ERROR("Failed to send gossip to {}: {}", peer,
-                  status.error_message());
-      } else {
-        LOG_INFO("Sent gossip to {}", peer);
+  const int NUM_SAMPLES = 5;  // Number of ping samples per peer
+
+  for (const auto& peer_address : peer_list) {
+    for (int i = 0; i < NUM_SAMPLES; i++) {
+      // Record t0 (client send time)
+      auto t0 = SyncClock::GetCurrentTimeNs();
+
+      // Send ping
+      int64_t t1 = 0, t2 = 0;
+      if (!peer_service_->Ping(peer_address, t1, t2)) {
+        LOG_WARN("Failed to ping peer {} during offset calculation",
+                 peer_address);
+        continue;
       }
+
+      // Record t3 (client receive time)
+      auto t3 = SyncClock::GetCurrentTimeNs();
+
+      // Calculate round-trip time: (t3 - t0) - (t2 - t1)
+      float rtt = static_cast<float>((t3 - t0) - (t2 - t1)) / 1000000.0f;
+      rtts.push_back(rtt);
+
+      // Calculate clock offset: ((t1 - t0) + (t2 - t3)) / 2
+      float offset = static_cast<float>((t1 - t0) + (t2 - t3)) / 2.0f;
+      offsets.push_back(offset);
+
+      LOG_DEBUG("Ping sample {}/{} to {}: RTT={:.2f}ms, offset={:.2f}ns", i + 1,
+                NUM_SAMPLES, peer_address, rtt, offset);
+
+      // Add a small delay between pings
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
   }
+
+  if (offsets.empty()) {
+    LOG_WARN("No valid offset measurements collected");
+    return 0.0f;
+  }
+
+  // Calculate average offset
+  float sum_offset = 0.0f;
+  for (float offset : offsets) {
+    sum_offset += offset;
+  }
+  float avg_offset = sum_offset / offsets.size();
+
+  // Calculate average RTT
+  float sum_rtt = 0.0f;
+  for (float rtt : rtts) {
+    sum_rtt += rtt;
+  }
+  float avg_rtt = sum_rtt / rtts.size();
+
+  LOG_INFO("Average network RTT: {:.2f}ms, clock offset: {:.2f}ns", avg_rtt,
+           avg_offset);
+
+  // Update the sync clock with the new offset
+  sync_clock_.SetAverageOffset(avg_offset);
+
+  return avg_offset;
+}
+
+void PeerNetwork::BroadcastGossip() {
+  std::vector<std::string> peer_list = GetConnectedPeers();
+  if (peer_list.empty()) {
+    LOG_DEBUG("No peers to broadcast gossip to");
+    return;
+  }
+
+  LOG_INFO("Broadcasting gossip to {} peers", peer_list.size());
+
+  // Create the full peer list including self
+  std::vector<std::string> full_peer_list = peer_list;
+
+  // Add self to the peer list
+  if (server_running_) {
+    std::string self_address =
+        GetLocalIPAddress() + ":" + std::to_string(server_port_);
+    full_peer_list.push_back(self_address);
+  }
+
+  // Send gossip to each peer
+  for (const auto& peer : peer_list) {
+    if (!peer_service_->Gossip(peer, full_peer_list)) {
+      LOG_ERROR("Failed to send gossip to {}", peer);
+    } else {
+      LOG_INFO("Sent gossip to {}", peer);
+    }
+  }
+
   // Calculate average offset for future use
   CalculateAverageOffset();
 }
 
 bool PeerNetwork::BroadcastLoad(int song_num) {
-  std::vector<std::string> peers;
-  {
-    std::lock_guard<std::mutex> lock(peers_mutex_);
-    for (auto& entry : peer_stubs_) peers.push_back(entry.first);
-  }
+  std::vector<std::string> peers = GetConnectedPeers();
   if (peers.empty()) {
     LOG_DEBUG("No peers to broadcast load to");
     return true;
   }
+
   int success = 0;
-  for (auto& peer : peers) {
-    client::MusicRequest req;
-    req.set_action("load");
-    req.set_song_num(song_num);
-    grpc::ClientContext ctx;
-    ctx.set_deadline(std::chrono::system_clock::now() +
-                     std::chrono::seconds(5));
-    client::MusicResponse resp;
-    std::lock_guard<std::mutex> lock(peers_mutex_);
-    auto it = peer_stubs_.find(peer);
-    if (it == peer_stubs_.end()) {
-      LOG_WARN("Peer {} disconnected before load", peer);
-      continue;
-    }
-    auto status = it->second->SendMusicCommand(&ctx, req, &resp);
-    if (!status.ok()) {
-      LOG_ERROR("Failed load to {}: {}", peer, status.error_message());
-    } else {
+  for (const auto& peer : peers) {
+    if (peer_service_->SendMusicCommand(peer, "load", 0, 0, song_num)) {
       success++;
+    } else {
+      LOG_ERROR("Failed to send load command to {}", peer);
     }
   }
+
   LOG_INFO("Load broadcast complete: {}/{} peers", success, peers.size());
   return success == static_cast<int>(peers.size());
 }
@@ -471,19 +452,10 @@ void PeerNetwork::BroadcastCommand(const std::string& action, int position) {
   // First, recalculate network timing to ensure we have fresh data
   CalculateAverageOffset();
 
-  std::vector<std::string> peer_list;
-  {
-    std::lock_guard<std::mutex> lock(peers_mutex_);
-
-    if (peer_stubs_.empty()) {
-      LOG_DEBUG("No peers to broadcast command to");
-      return;
-    }
-
-    // Make a copy of peer addresses to avoid holding the mutex during RPC calls
-    for (const auto& entry : peer_stubs_) {
-      peer_list.push_back(entry.first);
-    }
+  std::vector<std::string> peer_list = GetConnectedPeers();
+  if (peer_list.empty()) {
+    LOG_DEBUG("No peers to broadcast command to");
+    return;
   }
 
   LOG_INFO("Broadcasting command '{}' with position {} to {} peers", action,
@@ -500,33 +472,37 @@ void PeerNetwork::BroadcastCommand(const std::string& action, int position) {
 
   // Dispatch non-blocking RPCs to all peers
   for (const auto& peer_address : peer_list) {
-    client::MusicRequest request;
-    request.set_action(action);
-    request.set_position(position);
-    request.set_wait_time_ms(wait_ms);
-
-    std::thread([this, peer_address, request]() {
-      client::MusicResponse response;
-      grpc::ClientContext context;
-      context.set_deadline(std::chrono::system_clock::now() +
-                           std::chrono::seconds(1));
-      std::lock_guard<std::mutex> lock(peers_mutex_);
-      auto it = peer_stubs_.find(peer_address);
-      if (it == peer_stubs_.end()) {
-        LOG_WARN("Peer {} disconnected before broadcast", peer_address);
-        return;
-      }
-      auto status = it->second->SendMusicCommand(&context, request, &response);
-      if (!status.ok()) {
-        LOG_ERROR("Failed to send command to peer {}: {}", peer_address,
-                  status.error_message());
+    std::thread([this, peer_address, action, position, wait_ms]() {
+      if (!peer_service_->SendMusicCommand(peer_address, action, position,
+                                           wait_ms)) {
+        LOG_ERROR("Failed to send command to peer {}", peer_address);
       } else {
         LOG_INFO("Sent music command to {}", peer_address);
       }
     }).detach();
   }
+
   LOG_INFO("Dispatched command '{}' to {} peers, wait_ms={}", action,
            peer_list.size(), wait_ms);
+
   // Sleep locally for the same delay
   std::this_thread::sleep_for(std::chrono::milliseconds(wait_ms));
+}
+
+bool PeerNetwork::BroadcastExit() {
+  std::vector<std::string> peers = GetConnectedPeers();
+  if (peers.empty()) {
+    LOG_DEBUG("No peers to notify on exit");
+    return true;
+  }
+
+  int success = 0;
+  for (const auto& peer : peers) {
+    if (!peer_service_->Exit(peer)) {
+      LOG_ERROR("Failed to notify peer {} on exit", peer);
+    } else {
+      success++;
+    }
+  }
+  return success == static_cast<int>(peers.size());
 }

@@ -1,6 +1,7 @@
 # Server executable
 add_executable(music_server
     main.cpp
+    audio_server.cpp
 )
 
 # Include directories
