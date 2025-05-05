@@ -18,9 +18,12 @@ A decentralized, peer-based distributed system where multiple machines can colla
 
 ## Documentation
 
+[![Client Documentation](https://img.shields.io/badge/Client-Documentation-green)](src/client/README.md)
+[![Server Documentation](https://img.shields.io/badge/Server-Documentation-orange)](src/server/README.md)
+
 This project uses Doxygen to generate API documentation from source code comments.
 
-### Building Documentation
+### Building In-code Documentation
 
 ```bash
 mkdir -p build && cd build
