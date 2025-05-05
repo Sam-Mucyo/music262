@@ -434,6 +434,8 @@ void MainWindow::setupPeerControls() {
           &MainWindow::onLeavePeerClicked);
   connect(gossipButton_, &QPushButton::clicked, this,
           &MainWindow::onGossipClicked);
+  connect(positionSlider_, &QSlider::sliderPressed, this, [this]() {userIsSeeking_ = true;});
+  connect(positionSlider_, &QSlider::sliderReleased, this, &MainWindow::onSliderReleased);
 }
 
 void MainWindow::setupStatusBar() {
@@ -685,7 +687,35 @@ void MainWindow::onGossipClicked() {
                            "Gossiping peer connections to all peers.");
 }
 
+void MainWindow::onSliderReleased() {
+  if (playbackState_ == Playing) {
+      // If playing, briefly pause
+      client_->Pause();
+      playbackState_ = Paused;
+      updatePlayPauseButton();
+  }
+  if (playbackState_ == Paused) {
+      // Get the target second from the slider
+      int targetSecond = positionSlider_->value();  // already in seconds
+
+      // Update the position
+      client_->SeekTo(targetSecond);
+      
+      // If paused, resume
+      client_->Resume();
+      playbackState_ = Playing;
+      updatePlayPauseButton();
+  }
+  // Reset seeking to false
+  userIsSeeking_ = false;
+}
+
 void MainWindow::onPositionTimerTimeout() {
+  if (userIsSeeking_) {
+    // If user is seeking, do not update the position
+    return;
+  }
+  
   if (client_->GetPlayer().isPlaying()) {
     // Get position in bytes
     unsigned int positionBytes = client_->GetPosition();

@@ -33,6 +33,7 @@ class MainWindow : public QMainWindow {
   // Playback control slots
   void onPlayPauseClicked();
   void onStopClicked();
+  void onSliderReleased();
 
   // Helper methods for playback
   void playSelectedSong();
@@ -105,4 +106,5 @@ class MainWindow : public QMainWindow {
   // Current song info
   int currentSongNum_;
   unsigned int songDuration_;
+  bool userIsSeeking_ = false;
 };
