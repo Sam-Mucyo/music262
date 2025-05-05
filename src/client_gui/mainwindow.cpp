@@ -9,6 +9,7 @@
 #include <QVBoxLayout>
 #include <cmath>
 
+#include "../client/include/audio_service_interface.h"
 #include "logger.h"
 
 MainWindow::MainWindow(const std::string& server_address, int p2p_port,
@@ -24,7 +25,7 @@ MainWindow::MainWindow(const std::string& server_address, int p2p_port,
   // Create client
   LOG_INFO("Connecting to server at {}", server_address);
   client_ = std::make_shared<AudioClient>(
-      grpc::CreateChannel(server_address, grpc::InsecureChannelCredentials()));
+      music262::CreateAudioService(server_address));
 
   // Set up the UI
   setupUi();
