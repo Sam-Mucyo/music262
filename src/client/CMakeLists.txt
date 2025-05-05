@@ -5,6 +5,9 @@ add_executable(music_client
     audioplayer.cpp
     peer_network.cpp
     sync_clock.cpp
+    audio_service_grpc.cpp
+    peer_service_grpc.cpp
+    client_factory.cpp
 )
 
 # Include directories
