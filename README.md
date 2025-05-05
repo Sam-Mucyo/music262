@@ -3,7 +3,7 @@
 A decentralized, peer-based distributed system where multiple machines can collaborate to play the same audio track in synchronization (e.x. surround sound system, etc.)
 
 [![Engineering Notebook](https://img.shields.io/badge/Engineering-Notebook-blue)](https://github.com/Sam-Mucyo/music262/blob/main/docs/notebook/notebook.md)
-[![C++ Tests](https://github.com/Sam-Mucyo/music262/actions/workflows/cpp-tests.yml/badge.svg)](https://github.com/Sam-Mucyo/music262/actions/workflows/cpp-tests.yml)c
+[![C++ Tests](https://github.com/Sam-Mucyo/music262/actions/workflows/cpp-tests.yml/badge.svg)](https://github.com/Sam-Mucyo/music262/actions/workflows/cpp-tests.yml)
 [![Client Documentation](https://img.shields.io/badge/Client-Documentation-green)](src/client/README.md)
 [![Server Documentation](https://img.shields.io/badge/Server-Documentation-orange)](src/server/README.md)
 
