@@ -19,6 +19,7 @@ public:
     MOCK_METHOD(bool, Gossip, (const std::string& peer_address, const std::vector<std::string>& peer_list), (override));
     MOCK_METHOD(bool, SendMusicCommand, (const std::string& peer_address, const std::string& action, int position, int64_t wait_time_ms, int song_num), (override));
     MOCK_METHOD(bool, GetPosition, (const std::string& peer_address, int& position), (override));
+    MOCK_METHOD(bool, Exit, (const std::string& peer_address), (override));
 };
 
 // Mock implementation of AudioServiceInterface for testing
