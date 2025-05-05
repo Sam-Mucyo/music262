@@ -54,7 +54,7 @@ Our goal was to build a robust, reasonably performant system while using CS262 c
 ## Initial System Architecture
 
 
-![Initial System Architecture Diagram](hld_diagram.png)
+![Initial System Architecture Diagram](./images/hld_diagram.png)
 
 We were thinking:
 
