@@ -80,7 +80,7 @@ protected:
     std::unique_ptr<testing::NiceMock<MockAudioService>> mock_audio_service;
     std::unique_ptr<AudioClient> audio_client;
     std::unique_ptr<PeerNetwork> peer_network;
-    std::unique_ptr<MockPeerService> mock_peer_service;
+    std::unique_ptr<testing::StrictMock<MockPeerService>> mock_peer_service;
 };
 
 // Test ConnectToPeer functionality with successful connection
@@ -93,6 +93,10 @@ TEST_F(PeerNetworkTest, ConnectToPeerSuccess) {
     // Expect the Ping method to be called exactly once with the correct address
     EXPECT_CALL(*mock_peer_service_ptr, Ping(test_peer, testing::_, testing::_))
         .Times(1)
+        .WillOnce(testing::Return(true));
+    
+    // Must expect Exit to be called in BroadcastExit during destruction
+    EXPECT_CALL(*mock_peer_service_ptr, Exit(test_peer))
         .WillOnce(testing::Return(true));
     
     // Call the method under test
@@ -208,6 +212,12 @@ TEST_F(PeerNetworkTest, BroadcastGossip) {
         .Times(testing::AtLeast(1))
         .WillRepeatedly(testing::Return(true));
     
+    // Must expect Exit to be called in BroadcastExit during destruction
+    EXPECT_CALL(*mock_peer_service_ptr, Exit("192.168.1.1:50052"))
+        .WillOnce(testing::Return(true));
+    EXPECT_CALL(*mock_peer_service_ptr, Exit("192.168.1.2:50052"))
+        .WillOnce(testing::Return(true));
+    
     // Call the method under test
     peer_network->BroadcastGossip();
     
@@ -242,6 +252,12 @@ TEST_F(PeerNetworkTest, BroadcastLoad) {
     EXPECT_CALL(*mock_peer_service_ptr, 
                 SendMusicCommand("192.168.1.2:50052", "load", 0, 0, test_song_num))
         .Times(1)
+        .WillOnce(testing::Return(true));
+    
+    // Must expect Exit to be called in BroadcastExit during destruction
+    EXPECT_CALL(*mock_peer_service_ptr, Exit("192.168.1.1:50052"))
+        .WillOnce(testing::Return(true));
+    EXPECT_CALL(*mock_peer_service_ptr, Exit("192.168.1.2:50052"))
         .WillOnce(testing::Return(true));
     
     // Call the method under test
@@ -282,6 +298,12 @@ TEST_F(PeerNetworkTest, BroadcastLoadPartialFailure) {
                 SendMusicCommand("192.168.1.2:50052", "load", 0, 0, test_song_num))
         .Times(1)
         .WillOnce(testing::Return(false));
+    
+    // Must expect Exit to be called in BroadcastExit during destruction
+    EXPECT_CALL(*mock_peer_service_ptr, Exit("192.168.1.1:50052"))
+        .WillOnce(testing::Return(true));
+    EXPECT_CALL(*mock_peer_service_ptr, Exit("192.168.1.2:50052"))
+        .WillOnce(testing::Return(true));
     
     // Call the method under test
     bool result = peer_network->BroadcastLoad(test_song_num);
@@ -324,6 +346,12 @@ TEST_F(PeerNetworkTest, BroadcastCommandSendsToAllPeers) {
     EXPECT_CALL(*mock_peer_service_ptr, 
                 SendMusicCommand("192.168.1.2:50052", "play", 0, testing::_, -1))
         .Times(1)  // Enforce that this must be called exactly once
+        .WillOnce(testing::Return(true));
+    
+    // Must expect Exit to be called in BroadcastExit during destruction
+    EXPECT_CALL(*mock_peer_service_ptr, Exit("192.168.1.1:50052"))
+        .WillOnce(testing::Return(true));
+    EXPECT_CALL(*mock_peer_service_ptr, Exit("192.168.1.2:50052"))
         .WillOnce(testing::Return(true));
     
     // Call the method under test
