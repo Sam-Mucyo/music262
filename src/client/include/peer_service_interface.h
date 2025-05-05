@@ -31,6 +31,8 @@ class PeerServiceInterface {
 
   // Get the current playback position from a peer
   virtual bool GetPosition(const std::string& peer_address, int& position) = 0;
+
+  virtual bool Exit(const std::string& peer_address) = 0;
 };
 
 // Factory function to create a concrete implementation

@@ -151,12 +151,27 @@ grpc::Status PeerService::GetPosition(grpc::ServerContext* context,
     return grpc::Status(grpc::StatusCode::INTERNAL, "Client not initialized");
   }
 
-  unsigned int position = client_->GetPosition();
+  unsigned int position = client_->GetPlayer().get_position();
   response->set_position(position);
 
   LOG_DEBUG("Position request from peer {}, current position: {}",
             context->peer(), position);
 
+  return grpc::Status::OK;
+}
+
+grpc::Status PeerService::Exit(grpc::ServerContext* context,
+                               const client::ExitRequest* request,
+                               client::ExitResponse* response) {
+  std::string peer = context->peer();
+  // strip protocol prefix (ipv4: or ipv6:)
+  if (peer.rfind("ipv4:", 0) == 0 || peer.rfind("ipv6:", 0) == 0)
+    peer = peer.substr(peer.find(':') + 1);
+  auto network = client_->GetPeerNetwork();
+  if (network) {
+    network->DisconnectFromPeer(peer);
+    LOG_INFO("Removed peer {} on Exit notification", peer);
+  }
   return grpc::Status::OK;
 }
 
@@ -176,6 +191,8 @@ PeerNetwork::PeerNetwork(
 
 PeerNetwork::~PeerNetwork() {
   LOG_DEBUG("PeerNetwork shutting down");
+  // Notify peers that we are exiting
+  BroadcastExit();
   StopServer();
   DisconnectFromAllPeers();
 }
@@ -470,4 +487,22 @@ void PeerNetwork::BroadcastCommand(const std::string& action, int position) {
 
   // Sleep locally for the same delay
   std::this_thread::sleep_for(std::chrono::milliseconds(wait_ms));
+}
+
+bool PeerNetwork::BroadcastExit() {
+  std::vector<std::string> peers = GetConnectedPeers();
+  if (peers.empty()) {
+    LOG_DEBUG("No peers to notify on exit");
+    return true;
+  }
+
+  int success = 0;
+  for (const auto& peer : peers) {
+    if (!peer_service_->Exit(peer)) {
+      LOG_ERROR("Failed to notify peer {} on exit", peer);
+    } else {
+      success++;
+    }
+  }
+  return success == static_cast<int>(peers.size());
 }

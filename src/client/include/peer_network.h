@@ -37,6 +37,11 @@ class PeerService final : public client::ClientHandler::Service {
                            const client::GetPositionRequest* request,
                            client::GetPositionResponse* response) override;
 
+  // Notify peer exit
+  grpc::Status Exit(grpc::ServerContext* context,
+                    const client::ExitRequest* request,
+                    client::ExitResponse* response) override;
+
  private:
   AudioClient* client_;  // Non-owning pointer to main client
 };
@@ -84,6 +89,9 @@ class PeerNetwork {
 
   // Broadcast a load command synchronously and wait for all peers to load
   bool BroadcastLoad(int song_num);
+
+  // Notify all peers that this client is exiting
+  bool BroadcastExit();
 
   // Get the sync clock instance
   SyncClock& GetSyncClock() { return sync_clock_; }
