@@ -2,15 +2,26 @@ syntax = "proto3";
 
 package client;
 
+// Message for peer gossip
+message GossipResponse {}
+message GossipRequest {
+  repeated string peer_list = 1; // list of known peer addresses
+}
+
 // Messages for ping
 message PingRequest {}
-message PingResponse {}
+message PingResponse {
+  int32 t1 = 1;
+  int32 t2 = 2;
+}
 
 // Messages for music control
 message MusicRequest {
-  string action = 1;       // "play", "pause", "resume", "stop"
-  float wall_clock = 2;    // wall clock time of action
-  int32 position = 3;      // audio position in milliseconds
+  string action = 1;       // "play", "pause", "resume", "stop", "load"
+  int64 wall_clock_ns = 2; // wall clock time in nanoseconds since epoch
+  int64 wait_time_ms = 3;  // wait time in milliseconds
+  int32 position = 4;      // position of song playback
+  int32 song_num = 5;      // song index for load action
 }
 
 message MusicResponse {}
@@ -21,9 +32,16 @@ message GetPositionResponse {
   int32 position = 1;
 }
 
+// Notification for peer exit
+message ExitRequest {}
+message ExitResponse {}
+
 // Define the service
 service ClientHandler {
+  rpc Gossip(GossipRequest) returns (GossipResponse);
   rpc Ping(PingRequest) returns (PingResponse);
   rpc SendMusicCommand(MusicRequest) returns (MusicResponse);
   rpc GetPosition(GetPositionRequest) returns (GetPositionResponse);
+  // Notify peers that this client is exiting
+  rpc Exit(ExitRequest) returns (ExitResponse);
 }

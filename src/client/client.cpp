@@ -1,78 +1,190 @@
 #include "include/client.h"
-#include <chrono>
-#include <iostream>
-#include <thread>
 
-// --- Constructor ---
-Client::Client(const std::vector<std::string> &client_ips,
-               const std::string &server_addr)
-    : server(server_addr) {
-  connectToClients();
-  connectToServer();
+#include "include/peer_network.h"
+#include "logger.h"
+
+using audio_service::AudioChunk;
+using audio_service::LoadAudioRequest;
+using audio_service::PeerListRequest;
+using audio_service::PeerListResponse;
+using audio_service::PlaylistRequest;
+using audio_service::PlaylistResponse;
+
+AudioClient::AudioClient(std::shared_ptr<Channel> channel)
+    : stub_(audio_service::audio_service::NewStub(channel)),
+      player_(),
+      peer_sync_enabled_(false),
+      command_from_broadcast_(false),
+      current_song_num_(-1) {
+  LOG_DEBUG("AudioClient initialized");
 }
 
-// --- Client Connection ---
-void Client::connectToClients() {
-  for (const auto &ip : active_clients) {
-    getLatency(ip.first);
+AudioClient::~AudioClient() { LOG_DEBUG("AudioClient shutting down"); }
+
+std::vector<std::string> AudioClient::GetPlaylist() {
+  LOG_DEBUG("Requesting playlist from server");
+
+  PlaylistRequest request;
+  PlaylistResponse response;
+  ClientContext context;
+
+  Status status = stub_->GetPlaylist(&context, request, &response);
+
+  std::vector<std::string> playlist;
+  if (status.ok()) {
+    for (const auto& song : response.song_names()) {
+      playlist.push_back(song);
+    }
+    LOG_INFO("Retrieved playlist with {} songs", playlist.size());
+  } else {
+    LOG_ERROR("GetPlaylist RPC failed: {}", status.error_message());
+  }
+
+  return playlist;
+}
+
+bool AudioClient::LoadAudio(int song_num) {
+  LOG_INFO("Loading audio for song: {}", song_num);
+
+  // Create a request to load audio
+  LoadAudioRequest request;
+  request.set_song_num(song_num);
+
+  ClientContext context;
+  std::unique_ptr<ClientReader<AudioChunk>> reader(
+      stub_->LoadAudio(&context, request));
+
+  // Clear previously loaded audio data
+  audio_data_.clear();
+
+  // Process the audio stream
+  AudioChunk chunk;
+  size_t total_bytes = 0;
+
+  while (reader->Read(&chunk)) {
+    const std::string& data = chunk.data();
+    // Append data to our in-memory buffer
+    audio_data_.insert(audio_data_.end(), data.begin(), data.end());
+    total_bytes += data.size();
+  }
+
+  Status status = reader->Finish();
+  if (status.ok()) {
+    LOG_INFO("Successfully received {} bytes for {}", total_bytes, song_num);
+
+    // Load audio data into player from memory
+    if (!player_.loadFromMemory(audio_data_.data(), audio_data_.size())) {
+      LOG_ERROR("Failed to load audio data into player");
+      return false;
+    }
+    // Track loaded song for sync
+    current_song_num_ = song_num;
+    return true;
+  } else {
+    LOG_ERROR("LoadAudio RPC failed: {}", status.error_message());
+    return false;
   }
 }
 
-void Client::connectToServer() {
-  // TODO: Connect to central server
+void AudioClient::Play() {
+  // Broadcast load then play to peers if sync-enabled
+  if (peer_sync_enabled_ && !command_from_broadcast_ && peer_network_) {
+    if (current_song_num_ >= 0) {
+      LOG_DEBUG("Broadcasting load command to peers for song {}",
+                current_song_num_);
+      peer_network_->BroadcastLoad(current_song_num_);
+    } else {
+      LOG_WARN("No song loaded to broadcast load");
+    }
+    LOG_DEBUG("Broadcasting play command to peers");
+    peer_network_->BroadcastCommand("play", player_.get_position());
+  }
+  player_.play();
 }
 
-// --- Ping Handling ---
-void Client::getLatency(const std::string &ip_address) {
-  // TODO: Send PingRequest multiple times and measure average latency
+void AudioClient::Pause() {
+  // Broadcast command to peers if enabled and not from broadcast
+  if (peer_sync_enabled_ && !command_from_broadcast_ && peer_network_) {
+    LOG_DEBUG("Broadcasting pause command to peers");
+    peer_network_->BroadcastCommand("pause", player_.get_position());
+    // BroadcastCommand now handles synchronization timing internally
+  }
+  player_.pause();
 }
 
-// --- Request Parsing ---
-void Client::parseRequest(const std::string &message) {
-  // TODO: parse header, dispatch to appropriate handler
+void AudioClient::Resume() {
+  // Broadcast command to peers if enabled and not from broadcast
+  if (peer_sync_enabled_ && !command_from_broadcast_ && peer_network_) {
+    LOG_DEBUG("Broadcasting resume command to peers");
+    peer_network_->BroadcastCommand("resume", player_.get_position());
+    // BroadcastCommand now handles synchronization timing internally
+  }
+  player_.resume();
 }
 
-// --- Request Handlers ---
-void Client::handlePingRequest(const PingRequest &req) {
-  // TODO: send empty PingResponse immediately
+void AudioClient::Stop() {
+  // Broadcast command to peers if enabled and not from broadcast
+  if (peer_sync_enabled_ && !command_from_broadcast_ && peer_network_) {
+    LOG_DEBUG("Broadcasting stop command to peers");
+    peer_network_->BroadcastCommand("stop", 0);
+    // BroadcastCommand now handles synchronization timing internally
+  }
+  player_.stop();
 }
 
-void Client::handlePingResponse(const PingResponse &resp) {
-  // TODO: measure latency and update active_clients
-}
+unsigned int AudioClient::GetPosition() const { return player_.get_position(); }
 
-void Client::handleMusicRequest(const MusicRequest &req) {
-  // TODO: handle start/pause/resume/stop based on fields in req
-}
+std::vector<std::string> AudioClient::GetPeerClientIPs() {
+  LOG_DEBUG("Requesting peer client IPs from server");
 
-void Client::handleGetPositionRequest(const GetPositionRequest &req) {
-  // TODO: respond with current player position
-}
+  PeerListRequest request;
+  PeerListResponse response;
+  ClientContext context;
 
-void Client::handleGetPositionResponse(const GetPositionResponse &resp) {
-  // TODO: update or log external position
-}
+  Status status = stub_->GetPeerClientIPs(&context, request, &response);
 
-// --- Server communication ---
-void Client::getSong(int song_number) {
-  // TODO: download file from server, maybe store locally or load into
-  // AudioPlayer
-}
-
-// --- User command handler ---
-void Client::userAction(const std::string &command) {
-  if (command == "play") {
-    // TODO: Send MusicRequest to all peers with wall_clock and position = 0
-  } else if (command == "pause") {
-    // TODO: Send MusicRequest with action = pause, current time & player
-    // position
-  } else if (command == "resume") {
-    // TODO: Send MusicRequest to resume playback at a wall-clock time
-  } else if (command == "stop") {
-    // TODO: Send stop MusicRequest to all clients
-  } else if (command == "position") {
-    // TODO: Send GetPositionRequest to a specified client
+  std::vector<std::string> peers;
+  if (status.ok()) {
+    for (const auto& peer : response.client_ips()) {
+      peers.push_back(peer);
+    }
+    LOG_INFO("Retrieved {} peer IPs from server", peers.size());
   } else {
-    std::cout << "Unknown command: " << command << std::endl;
+    LOG_ERROR("GetPeerClientIPs RPC failed: {}", status.error_message());
+  }
+
+  return peers;
+}
+
+void AudioClient::EnablePeerSync(bool enable) {
+  peer_sync_enabled_ = enable;
+  LOG_INFO("Peer synchronization {}", enable ? "enabled" : "disabled");
+}
+
+void AudioClient::SetPeerNetwork(std::shared_ptr<PeerNetwork> peer_network) {
+  peer_network_ = peer_network;
+  LOG_DEBUG("Peer network set");
+}
+
+bool AudioClient::IsServerConnected() {
+  LOG_DEBUG("Verifying server connection");
+
+  // Try to get the playlist as a simple way to check if server is responsive
+  PlaylistRequest request;
+  PlaylistResponse response;
+  ClientContext context;
+
+  // Set a deadline for the RPC
+  context.set_deadline(std::chrono::system_clock::now() +
+                       std::chrono::seconds(2));
+
+  Status status = stub_->GetPlaylist(&context, request, &response);
+
+  if (status.ok()) {
+    LOG_INFO("Server connection successful");
+    return true;
+  } else {
+    LOG_ERROR("Failed to connect to server: {}", status.error_message());
+    return false;
   }
 }

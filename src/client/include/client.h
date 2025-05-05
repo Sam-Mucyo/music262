@@ -1,42 +1,83 @@
 #pragma once
 
+#include <grpcpp/grpcpp.h>
+
+#include <atomic>
+#include <memory>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
-// Forward declarations for Protobuf message types
-class PingRequest;
-class PingResponse;
-class MusicRequest;
-class MusicResponse;
-class GetPositionRequest;
-class GetPositionResponse;
+#include "audio_service.grpc.pb.h"
+#include "audioplayer.h"
 
-class Client {
-public:
-    // Constructor
-    Client(const std::vector<std::string>& client_ips, const std::string& server_addr);
+using grpc::Channel;
+using grpc::ClientContext;
+using grpc::ClientReader;
+using grpc::Status;
 
-    // Latency & Connection
-    void connectToClients();
-    void connectToServer();
-    void getLatency(const std::string& ip_address);
+// Forward declaration
+class PeerNetwork;
 
-    // Handle incoming message logic
-    void parseRequest(const std::string& message); // from a client
-    void handlePingRequest(const PingRequest& req);
-    void handleMusicRequest(const MusicRequest& req);
-    void handleGetPositionRequest(const GetPositionRequest& req);
-    void handlePingResponse(const PingResponse& resp);
-    void handleGetPositionResponse(const GetPositionResponse& resp);
+class AudioClient {
+ public:
+  AudioClient(std::shared_ptr<Channel> channel);
+  ~AudioClient();
 
-    // Client-side user interaction (send to peers)
-    void userAction(const std::string& command);
+  // Request the playlist from the server
+  std::vector<std::string> GetPlaylist();
 
-    // Download song from server
-    void getSong(int song_number);
+  // Load audio data for a specific song
+  bool LoadAudio(int song_num);
 
-private:
-    std::unordered_map<std::string, float> active_clients; // ip -> latency
-    std::string server;
+  // Play the currently loaded audio
+  void Play();
+
+  // Pause the currently playing audio
+  void Pause();
+
+  // Resume the paused audio
+  void Resume();
+
+  // Stop the currently playing audio
+  void Stop();
+
+  // Get the current playback position
+  unsigned int GetPosition() const;
+
+  // Get the list of connected client IPs
+  std::vector<std::string> GetPeerClientIPs();
+
+  // Verify connection to the server
+  bool IsServerConnected();
+
+  // Get reference to audio player (for peer service)
+  AudioPlayer& GetPlayer() { return player_; }
+
+  // Get reference to the peer network
+  std::shared_ptr<PeerNetwork> GetPeerNetwork() { return peer_network_; }
+
+  // Get reference to the audio player's audio data
+  std::vector<char>& GetAudioData() { return audio_data_; }
+
+  // Control whether commands should be broadcast to peers
+  void EnablePeerSync(bool enable);
+  bool IsPeerSyncEnabled() const { return peer_sync_enabled_; }
+
+  // Set the peer network for command broadcasting
+  void SetPeerNetwork(std::shared_ptr<PeerNetwork> peer_network);
+
+  // Flag to prevent broadcast loops
+  void SetCommandFromBroadcast(bool value) { command_from_broadcast_ = value; }
+  bool IsCommandFromBroadcast() const { return command_from_broadcast_; }
+
+ private:
+  std::unique_ptr<audio_service::audio_service::Stub> stub_;
+  AudioPlayer player_;
+  std::vector<char> audio_data_;
+  int current_song_num_{-1};  // index of last loaded song
+
+  // Peer synchronization
+  std::shared_ptr<PeerNetwork> peer_network_;
+  std::atomic<bool> peer_sync_enabled_{false};
+  std::atomic<bool> command_from_broadcast_{false};
 };
