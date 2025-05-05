@@ -277,8 +277,8 @@ This led to a major refinement around May 1st-4th, which you can see in our clos
 
 2.  **NTP-Inspired Clock Synchronization:** We implemented a more robust mechanism inspired by the Network Time Protocol (NTP) to estimate clock offsets and network latency (Round Trip Time - RTT) between peers.
     *   **Periodic Pinging:** Clients periodically ping each other in the background (or upon connection) multiple times (e.g., 5 trials) to get more stable RTT and offset estimates.
-    *   **Offset Calculation:** Standard NTP formulas were used to estimate the clock offset between pairs of peers based on timestamps exchanged during the ping process.
-    *   **Target Execution Time:** Instead of arbitrary delays, the initiator calculates a target execution time in the near future (e.g., `now + safety_margin + max_estimated_RTT`). This target time, adjusted for the estimated clock offset for each specific peer, is included in the `MusicCommand`.
+    *   **Offset Calculation:** Standard NTP formulas were used to estimate the clock offset of each peer from its system time and an absolute global time based on timestamps exchanged during the ping process.
+    *   **Target Execution Time:** Instead of arbitrary delays, the initiator calculates an absolute target execution time in the near future (e.g., `now + safety_margin + max_estimated_RTT`). This target time is included in the 'MusicCommand' and is then adjusted for the estimated clock offset for each specific peer.
     *   **Receiver Logic:** Upon receiving a command, a peer uses the target time and its estimated offset relative to the sender to schedule the action locally using its own clock.
 
     ```protobuf
