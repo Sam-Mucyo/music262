@@ -120,8 +120,8 @@ grpc::Status PeerService::SendMusicCommand(grpc::ServerContext* context,
       context->peer(), action, position, wait_ms);
 
   // Mark that this command came from a broadcast to prevent echo
-  client_->SetCommandFromBroadcastAction(action);
   client_->SetCommandFromBroadcast(true);
+  client_->SetCommandFromBroadcastAction(action);
 
   std::thread([client = client_, action, position, wait_ms]() {
     if (wait_ms > 0)
@@ -138,9 +138,6 @@ grpc::Status PeerService::SendMusicCommand(grpc::ServerContext* context,
       client->Stop();
     else
       LOG_WARN("Unknown command from peer: {}", action);
-    client->SetCommandFromBroadcast(false);
-    client->SetCommandFromBroadcastAction(" ");
-    LOG_DEBUG("Music command executed successfully: {}", action);
   }).detach();
   return grpc::Status::OK;
 }

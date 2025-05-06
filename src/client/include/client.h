@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <mutex>
 #include <memory>
 #include <string>
 #include <vector>
@@ -78,6 +79,7 @@ class AudioClient {
  private:
   std::unique_ptr<music262::AudioServiceInterface> audio_service_;
   AudioPlayer player_;
+  std::mutex  player_mutex_;
   std::vector<char> audio_data_;
   int current_song_num_{-1};  // index of last loaded song
 

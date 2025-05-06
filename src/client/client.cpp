@@ -54,6 +54,9 @@ bool AudioClient::LoadAudio(int song_num) {
 }
 
 void AudioClient::Play() {
+
+  std::lock_guard<std::mutex> lk(player_mutex_);
+
   // Broadcast load then play to peers if sync-enabled
   if (peer_sync_enabled_ && !command_from_broadcast_ && peer_network_) {
     if (current_song_num_ >= 0) {
@@ -70,6 +73,9 @@ void AudioClient::Play() {
 }
 
 void AudioClient::Pause() {
+
+  std::lock_guard<std::mutex> lk(player_mutex_);
+
   // Broadcast command to peers if enabled and not from broadcast
   if (peer_sync_enabled_ && !command_from_broadcast_ && peer_network_) {
     LOG_DEBUG("Broadcasting pause command to peers");
@@ -80,6 +86,9 @@ void AudioClient::Pause() {
 }
 
 void AudioClient::Resume() {
+
+  std::lock_guard<std::mutex> lk(player_mutex_);
+
   // Broadcast command to peers if enabled and not from broadcast
   if (peer_sync_enabled_ && !command_from_broadcast_ && peer_network_) {
     LOG_DEBUG("Broadcasting resume command to peers");
@@ -90,6 +99,9 @@ void AudioClient::Resume() {
 }
 
 void AudioClient::Stop() {
+
+  std::lock_guard<std::mutex> lk(player_mutex_);
+
   // Broadcast command to peers if enabled and not from broadcast
   if (peer_sync_enabled_ && !command_from_broadcast_ && peer_network_) {
     LOG_DEBUG("Broadcasting stop command to peers");
