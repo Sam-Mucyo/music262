@@ -252,83 +252,162 @@ void MainWindow::setupPlaybackControls() {
   nowPlayingLabel_->setStyleSheet(
       "font-size: 16px; font-weight: bold; margin-top: 10px; color: #E0E0E0;");
 
-  // Playback controls in a group box
+  // Playback controls in a group box with a modern look
   QGroupBox* controlsGroup = new QGroupBox("Playback Controls");
+  controlsGroup->setStyleSheet(
+      "QGroupBox { border: 1px solid #444; border-radius: 10px; margin-top: "
+      "1em; "
+      "background-color: #1E1E1E; padding: 10px; }"
+      "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 "
+      "5px; "
+      "color: #BB86FC; font-weight: bold; }");
+
+  // Main layout for controls with better spacing
   QVBoxLayout* controlsLayout = new QVBoxLayout(controlsGroup);
+  controlsLayout->setSpacing(15);
+  controlsLayout->setContentsMargins(15, 20, 15, 15);
 
-  // Buttons in a horizontal layout with better spacing
-  QHBoxLayout* buttonsLayout = new QHBoxLayout();
-  buttonsLayout->setSpacing(10);
-  buttonsLayout->setContentsMargins(10, 10, 10, 10);
+  // Create a grid layout for better organization of controls
+  QGridLayout* controlsGridLayout = new QGridLayout();
+  controlsGridLayout->setSpacing(10);
 
-  // Create combined play/pause button
+  // Create combined play/pause button with improved styling
   playPauseButton_ = new QPushButton("Play");
   playPauseButton_->setIcon(QIcon::fromTheme("media-playback-start"));
+  playPauseButton_->setIconSize(QSize(18, 18));
+  playPauseButton_->setStyleSheet(
+      "QPushButton { background-color: #BB86FC; color: #121212; border-radius: "
+      "20px; "
+      "padding: 10px; font-weight: bold; }"
+      "QPushButton:hover { background-color: #9D4EDD; }");
 
   stopButton_ = new QPushButton("Stop");
   stopButton_->setIcon(QIcon::fromTheme("media-playback-stop"));
+  stopButton_->setIconSize(QSize(18, 18));
+  stopButton_->setStyleSheet(
+      "QPushButton { background-color: #BB86FC; color: #121212; border-radius: "
+      "20px; "
+      "padding: 10px; font-weight: bold; }"
+      "QPushButton:hover { background-color: #9D4EDD; }"
+      "QPushButton:disabled { background-color: #4D4D4D; color: #7F7F7F; }");
 
-  // Create shuffle and repeat buttons
+  // Create shuffle and repeat buttons with toggle styling
   shuffleButton_ = new QPushButton("Shuffle: Off");
   shuffleButton_->setIcon(QIcon::fromTheme("media-playlist-shuffle"));
+  shuffleButton_->setIconSize(QSize(16, 16));
   shuffleButton_->setCheckable(true);
   shuffleButton_->setChecked(false);
+  shuffleButton_->setStyleSheet(
+      "QPushButton { background-color: #4D4D4D; color: #E0E0E0; border-radius: "
+      "20px; "
+      "padding: 8px; font-weight: bold; }"
+      "QPushButton:hover { background-color: #666666; }");
 
   repeatButton_ = new QPushButton("Repeat: Off");
   repeatButton_->setIcon(QIcon::fromTheme("media-playlist-repeat"));
+  repeatButton_->setIconSize(QSize(16, 16));
   repeatButton_->setCheckable(true);
   repeatButton_->setChecked(false);
+  repeatButton_->setStyleSheet(
+      "QPushButton { background-color: #4D4D4D; color: #E0E0E0; border-radius: "
+      "20px; "
+      "padding: 8px; font-weight: bold; }"
+      "QPushButton:hover { background-color: #666666; }");
 
-  // Set button sizes
-  playPauseButton_->setMinimumWidth(120);
-  playPauseButton_->setMinimumHeight(40);
-  stopButton_->setMinimumWidth(120);
-  stopButton_->setMinimumHeight(40);
+  // Set button sizes for a more balanced look
+  playPauseButton_->setMinimumWidth(140);
+  playPauseButton_->setMinimumHeight(45);
+  stopButton_->setMinimumWidth(140);
+  stopButton_->setMinimumHeight(45);
   shuffleButton_->setMinimumWidth(120);
   shuffleButton_->setMinimumHeight(40);
   repeatButton_->setMinimumWidth(120);
   repeatButton_->setMinimumHeight(40);
 
-  // Add buttons to layout
-  buttonsLayout->addWidget(playPauseButton_);
-  buttonsLayout->addWidget(stopButton_);
-  buttonsLayout->setAlignment(Qt::AlignCenter);
+  // Arrange buttons in a grid for better visual organization
+  // Row 0: Main playback controls
+  controlsGridLayout->addWidget(playPauseButton_, 0, 0);
+  controlsGridLayout->addWidget(stopButton_, 0, 1);
 
-  // Add shuffle and repeat buttons in a new row
-  QHBoxLayout* playlistControlsLayout = new QHBoxLayout();
-  playlistControlsLayout->setSpacing(10);
-  playlistControlsLayout->setContentsMargins(10, 10, 10, 10);
-  playlistControlsLayout->addWidget(shuffleButton_);
-  playlistControlsLayout->addWidget(repeatButton_);
-  playlistControlsLayout->setAlignment(Qt::AlignCenter);
+  // Row 1: Playlist controls
+  controlsGridLayout->addWidget(shuffleButton_, 1, 0);
+  controlsGridLayout->addWidget(repeatButton_, 1, 1);
 
   // Disable stop button initially
   stopButton_->setEnabled(false);
 
-  controlsLayout->addLayout(buttonsLayout);
-  controlsLayout->addLayout(playlistControlsLayout);
+  // Add the grid layout to the main controls layout
+  controlsLayout->addLayout(controlsGridLayout);
 
-  // Position slider and labels with better styling
-  QHBoxLayout* positionLayout = new QHBoxLayout();
+  // Position slider and labels with modern styling
+  QWidget* sliderContainer = new QWidget();
+  sliderContainer->setStyleSheet(
+      "QWidget { background-color: #252525; border-radius: 8px; padding: 8px; "
+      "}");
+  QHBoxLayout* positionLayout = new QHBoxLayout(sliderContainer);
+  positionLayout->setContentsMargins(10, 5, 10, 5);
+  positionLayout->setSpacing(10);
+
+  // Time labels with improved styling
   positionLabel_ = new QLabel("0:00");
-  positionSlider_ = new QSlider(Qt::Horizontal);
-  durationLabel_ = new QLabel("0:00");
+  positionLabel_->setStyleSheet(
+      "QLabel { color: #BB86FC; font-weight: bold; font-size: 13px; }");
 
+  durationLabel_ = new QLabel("0:00");
+  durationLabel_->setStyleSheet(
+      "QLabel { color: #BB86FC; font-weight: bold; font-size: 13px; }");
+
+  // Improved slider styling
+  positionSlider_ = new QSlider(Qt::Horizontal);
   positionSlider_->setEnabled(false);
   positionSlider_->setMinimumWidth(300);
-  positionLabel_->setMinimumWidth(40);
-  durationLabel_->setMinimumWidth(40);
+  positionSlider_->setStyleSheet(
+      "QSlider::groove:horizontal { "
+      "  border: 1px solid #444; "
+      "  background: #333; "
+      "  height: 8px; "
+      "  border-radius: 4px; "
+      "} "
+      "QSlider::handle:horizontal { "
+      "  background: #BB86FC; "
+      "  border: 1px solid #BB86FC; "
+      "  width: 16px; "
+      "  margin-top: -5px; "
+      "  margin-bottom: -5px; "
+      "  border-radius: 8px; "
+      "} "
+      "QSlider::handle:horizontal:hover { "
+      "  background: #9D4EDD; "
+      "} "
+      "QSlider::sub-page:horizontal { "
+      "  background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0, "
+      "                            stop: 0 #BB86FC, stop: 1 #9D4EDD); "
+      "  border: 1px solid #444; "
+      "  height: 8px; "
+      "  border-radius: 4px; "
+      "}");
+
+  positionLabel_->setMinimumWidth(45);
+  durationLabel_->setMinimumWidth(45);
 
   positionLayout->addWidget(positionLabel_);
-  positionLayout->addWidget(positionSlider_);
+  positionLayout->addWidget(positionSlider_, 1);
   positionLayout->addWidget(durationLabel_);
 
-  controlsLayout->addLayout(positionLayout);
+  controlsLayout->addWidget(sliderContainer);
 
-  // Add components to the right panel
+  // Add a spacer for better vertical alignment
+  QSpacerItem* topSpacer =
+      new QSpacerItem(20, 20, QSizePolicy::Minimum, QSizePolicy::Fixed);
+
+  // Add components to the right panel with improved spacing
+  rightLayout->addItem(topSpacer);
   rightLayout->addWidget(coverWidget, 3);
   rightLayout->addWidget(nowPlayingLabel_);
+  rightLayout->addSpacing(
+      15);  // Add space between now playing label and controls
   rightLayout->addWidget(controlsGroup, 1);
+  rightLayout->addSpacing(10);  // Add space at the bottom
   rightLayout->setAlignment(Qt::AlignCenter);
 
   // Add panels to main layout
@@ -658,14 +737,14 @@ void MainWindow::updateShuffleButton() {
     shuffleButton_->setStyleSheet(
         "QPushButton { background-color: #BB86FC; color: #121212; "
         "border-radius: "
-        "4px; padding: 8px; font-weight: bold; }"
+        "20px; padding: 8px; font-weight: bold; }"
         "QPushButton:hover { background-color: #9D4EDD; }");
   } else {
     shuffleButton_->setText("Shuffle: Off");
     shuffleButton_->setStyleSheet(
         "QPushButton { background-color: #4D4D4D; color: #E0E0E0; "
         "border-radius: "
-        "4px; padding: 8px; font-weight: bold; }"
+        "20px; padding: 8px; font-weight: bold; }"
         "QPushButton:hover { background-color: #666666; }");
   }
 }
@@ -676,14 +755,14 @@ void MainWindow::updateRepeatButton() {
     repeatButton_->setStyleSheet(
         "QPushButton { background-color: #BB86FC; color: #121212; "
         "border-radius: "
-        "4px; padding: 8px; font-weight: bold; }"
+        "20px; padding: 8px; font-weight: bold; }"
         "QPushButton:hover { background-color: #9D4EDD; }");
   } else {
     repeatButton_->setText("Repeat: Off");
     repeatButton_->setStyleSheet(
         "QPushButton { background-color: #4D4D4D; color: #E0E0E0; "
         "border-radius: "
-        "4px; padding: 8px; font-weight: bold; }"
+        "20px; padding: 8px; font-weight: bold; }"
         "QPushButton:hover { background-color: #666666; }");
   }
 }
