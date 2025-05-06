@@ -29,7 +29,7 @@ bool AudioClient::LoadAudio(int song_num) {
   audio_data_.clear();
 
   // Get channel index
-  int num_channels = peer_network_->GetConnectedPeers().size();
+  int num_channels = peer_network_->GetConnectedPeers().size() + 1;
   int channel_idx;
   if (num_channels < 2) {
     channel_idx = -1; // no channel splitting
