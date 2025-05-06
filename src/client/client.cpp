@@ -124,6 +124,8 @@ void AudioClient::Stop() {
 }
 
 void AudioClient::SeekTo(int seconds) {
+  std::lock_guard<std::mutex> lk(player_mutex_);
+
   const WavHeader& header = GetPlayer().get_header();
   unsigned int bytesPerSecond = header.sampleRate * header.numChannels * (header.bitsPerSample / 8);
   unsigned int targetByte = seconds * bytesPerSecond;
