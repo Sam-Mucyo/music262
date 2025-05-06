@@ -34,10 +34,15 @@ class MainWindow : public QMainWindow {
   void onPlayPauseClicked();
   void onStopClicked();
   void onSliderReleased();
+  void onShuffleClicked();
+  void onRepeatClicked();
 
   // Helper methods for playback
   void playSelectedSong();
   void updatePlayPauseButton();
+  void playNextSong();
+  void updateShuffleButton();
+  void updateRepeatButton();
 
   // Peer connection slots
   void onRefreshPeersClicked();
@@ -75,6 +80,8 @@ class MainWindow : public QMainWindow {
   QListWidget* playlistWidget_;
   QPushButton* playPauseButton_;  // Combined play/pause/resume button
   QPushButton* stopButton_;
+  QPushButton* shuffleButton_;
+  QPushButton* repeatButton_;
   QSlider* positionSlider_;
   QLabel* positionLabel_;
   QLabel* durationLabel_;
@@ -83,6 +90,11 @@ class MainWindow : public QMainWindow {
   // Playback state tracking
   enum PlaybackState { Stopped, Playing, Paused };
   PlaybackState playbackState_;
+
+  // Shuffle and repeat state
+  bool shuffleEnabled_;
+  bool repeatEnabled_;
+  std::vector<int> shuffleQueue_;
 
   // Peers tab
   QWidget* peersTab_;
@@ -107,4 +119,5 @@ class MainWindow : public QMainWindow {
   int currentSongNum_;
   unsigned int songDuration_;
   bool userIsSeeking_ = false;
+  bool autoPlayNext_ = false;
 };

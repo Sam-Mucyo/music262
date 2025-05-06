@@ -7,7 +7,9 @@
 #include <QMessageBox>
 #include <QScrollArea>
 #include <QVBoxLayout>
+#include <algorithm>
 #include <cmath>
+#include <random>
 
 #include "../client/include/audio_service_interface.h"
 #include "logger.h"
@@ -17,7 +19,10 @@ MainWindow::MainWindow(const std::string& server_address, int p2p_port,
     : QMainWindow(parent),
       currentSongNum_(-1),
       songDuration_(0),
-      playbackState_(Stopped) {
+      playbackState_(Stopped),
+      shuffleEnabled_(false),
+      repeatEnabled_(false),
+      autoPlayNext_(false) {
   // Set window properties
   setWindowTitle("Music Client");
   resize(800, 600);
@@ -263,21 +268,45 @@ void MainWindow::setupPlaybackControls() {
   stopButton_ = new QPushButton("Stop");
   stopButton_->setIcon(QIcon::fromTheme("media-playback-stop"));
 
+  // Create shuffle and repeat buttons
+  shuffleButton_ = new QPushButton("Shuffle: Off");
+  shuffleButton_->setIcon(QIcon::fromTheme("media-playlist-shuffle"));
+  shuffleButton_->setCheckable(true);
+  shuffleButton_->setChecked(false);
+
+  repeatButton_ = new QPushButton("Repeat: Off");
+  repeatButton_->setIcon(QIcon::fromTheme("media-playlist-repeat"));
+  repeatButton_->setCheckable(true);
+  repeatButton_->setChecked(false);
+
   // Set button sizes
   playPauseButton_->setMinimumWidth(120);
   playPauseButton_->setMinimumHeight(40);
   stopButton_->setMinimumWidth(120);
   stopButton_->setMinimumHeight(40);
+  shuffleButton_->setMinimumWidth(120);
+  shuffleButton_->setMinimumHeight(40);
+  repeatButton_->setMinimumWidth(120);
+  repeatButton_->setMinimumHeight(40);
 
   // Add buttons to layout
   buttonsLayout->addWidget(playPauseButton_);
   buttonsLayout->addWidget(stopButton_);
   buttonsLayout->setAlignment(Qt::AlignCenter);
 
+  // Add shuffle and repeat buttons in a new row
+  QHBoxLayout* playlistControlsLayout = new QHBoxLayout();
+  playlistControlsLayout->setSpacing(10);
+  playlistControlsLayout->setContentsMargins(10, 10, 10, 10);
+  playlistControlsLayout->addWidget(shuffleButton_);
+  playlistControlsLayout->addWidget(repeatButton_);
+  playlistControlsLayout->setAlignment(Qt::AlignCenter);
+
   // Disable stop button initially
   stopButton_->setEnabled(false);
 
   controlsLayout->addLayout(buttonsLayout);
+  controlsLayout->addLayout(playlistControlsLayout);
 
   // Position slider and labels with better styling
   QHBoxLayout* positionLayout = new QHBoxLayout();
@@ -310,6 +339,10 @@ void MainWindow::setupPlaybackControls() {
   connect(playPauseButton_, &QPushButton::clicked, this,
           &MainWindow::onPlayPauseClicked);
   connect(stopButton_, &QPushButton::clicked, this, &MainWindow::onStopClicked);
+  connect(shuffleButton_, &QPushButton::clicked, this,
+          &MainWindow::onShuffleClicked);
+  connect(repeatButton_, &QPushButton::clicked, this,
+          &MainWindow::onRepeatClicked);
 
   // Double-click on a playlist item to play it immediately
   connect(playlistWidget_, &QListWidget::itemDoubleClicked,
@@ -434,8 +467,10 @@ void MainWindow::setupPeerControls() {
           &MainWindow::onLeavePeerClicked);
   connect(gossipButton_, &QPushButton::clicked, this,
           &MainWindow::onGossipClicked);
-  connect(positionSlider_, &QSlider::sliderPressed, this, [this]() {userIsSeeking_ = true;});
-  connect(positionSlider_, &QSlider::sliderReleased, this, &MainWindow::onSliderReleased);
+  connect(positionSlider_, &QSlider::sliderPressed, this,
+          [this]() { userIsSeeking_ = true; });
+  connect(positionSlider_, &QSlider::sliderReleased, this,
+          &MainWindow::onSliderReleased);
 }
 
 void MainWindow::setupStatusBar() {
@@ -617,6 +652,185 @@ void MainWindow::updatePlayPauseButton() {
   }
 }
 
+void MainWindow::updateShuffleButton() {
+  if (shuffleEnabled_) {
+    shuffleButton_->setText("Shuffle: On");
+    shuffleButton_->setStyleSheet(
+        "QPushButton { background-color: #BB86FC; color: #121212; "
+        "border-radius: "
+        "4px; padding: 8px; font-weight: bold; }"
+        "QPushButton:hover { background-color: #9D4EDD; }");
+  } else {
+    shuffleButton_->setText("Shuffle: Off");
+    shuffleButton_->setStyleSheet(
+        "QPushButton { background-color: #4D4D4D; color: #E0E0E0; "
+        "border-radius: "
+        "4px; padding: 8px; font-weight: bold; }"
+        "QPushButton:hover { background-color: #666666; }");
+  }
+}
+
+void MainWindow::updateRepeatButton() {
+  if (repeatEnabled_) {
+    repeatButton_->setText("Repeat: On");
+    repeatButton_->setStyleSheet(
+        "QPushButton { background-color: #BB86FC; color: #121212; "
+        "border-radius: "
+        "4px; padding: 8px; font-weight: bold; }"
+        "QPushButton:hover { background-color: #9D4EDD; }");
+  } else {
+    repeatButton_->setText("Repeat: Off");
+    repeatButton_->setStyleSheet(
+        "QPushButton { background-color: #4D4D4D; color: #E0E0E0; "
+        "border-radius: "
+        "4px; padding: 8px; font-weight: bold; }"
+        "QPushButton:hover { background-color: #666666; }");
+  }
+}
+
+void MainWindow::onShuffleClicked() {
+  shuffleEnabled_ = !shuffleEnabled_;
+  updateShuffleButton();
+
+  if (shuffleEnabled_) {
+    // Generate a new shuffle queue
+    shuffleQueue_.clear();
+    int playlistSize = playlistWidget_->count();
+
+    // Create a vector with all song numbers
+    std::vector<int> allSongs;
+    for (int i = 0; i < playlistSize; i++) {
+      QString itemText = playlistWidget_->item(i)->text();
+      int songNum = itemText.section('.', 0, 0).toInt();
+      if (songNum > 0) {  // Skip any non-song items
+        allSongs.push_back(songNum);
+      }
+    }
+
+    // Shuffle the vector
+    std::random_device rd;
+    std::mt19937 g(rd());
+    std::shuffle(allSongs.begin(), allSongs.end(), g);
+
+    // Store in shuffle queue
+    shuffleQueue_ = allSongs;
+
+    LOG_INFO("Shuffle enabled, queue size: {}", shuffleQueue_.size());
+  } else {
+    LOG_INFO("Shuffle disabled");
+  }
+}
+
+void MainWindow::onRepeatClicked() {
+  repeatEnabled_ = !repeatEnabled_;
+  updateRepeatButton();
+  LOG_INFO("Repeat {}", repeatEnabled_ ? "enabled" : "disabled");
+}
+
+void MainWindow::playNextSong() {
+  if (playlistWidget_->count() == 0 || playlistWidget_->count() == 1) {
+    // No songs or only one song in the playlist
+    if (repeatEnabled_ && currentSongNum_ > 0) {
+      // If repeat is enabled, play the current song again
+      if (client_->LoadAudio(currentSongNum_)) {
+        client_->Play();
+        playbackState_ = Playing;
+        updatePlayPauseButton();
+        stopButton_->setEnabled(true);
+      }
+    }
+    return;
+  }
+
+  int nextSongNum = -1;
+  QString nextSongName;
+
+  if (shuffleEnabled_ && !shuffleQueue_.empty()) {
+    // Find current song in shuffle queue
+    auto it =
+        std::find(shuffleQueue_.begin(), shuffleQueue_.end(), currentSongNum_);
+
+    if (it != shuffleQueue_.end() && it + 1 != shuffleQueue_.end()) {
+      // Move to next song in shuffle queue
+      nextSongNum = *(it + 1);
+    } else {
+      // At the end of queue or current song not in queue, start from beginning
+      nextSongNum = shuffleQueue_.front();
+    }
+
+    // Find the song in the playlist to get its name
+    for (int i = 0; i < playlistWidget_->count(); i++) {
+      QString itemText = playlistWidget_->item(i)->text();
+      int songNum = itemText.section('.', 0, 0).toInt();
+      if (songNum == nextSongNum) {
+        nextSongName = itemText.section('.', 1).trimmed();
+        playlistWidget_->setCurrentRow(i);
+        break;
+      }
+    }
+  } else if (repeatEnabled_) {
+    // Find the current song in the playlist
+    int currentIndex = -1;
+    for (int i = 0; i < playlistWidget_->count(); i++) {
+      QString itemText = playlistWidget_->item(i)->text();
+      int songNum = itemText.section('.', 0, 0).toInt();
+      if (songNum == currentSongNum_) {
+        currentIndex = i;
+        break;
+      }
+    }
+
+    if (currentIndex != -1) {
+      // Get the next song (or wrap around to the first song)
+      int nextIndex = (currentIndex + 1) % playlistWidget_->count();
+      QString itemText = playlistWidget_->item(nextIndex)->text();
+      nextSongNum = itemText.section('.', 0, 0).toInt();
+      nextSongName = itemText.section('.', 1).trimmed();
+      playlistWidget_->setCurrentRow(nextIndex);
+    }
+  }
+
+  if (nextSongNum > 0) {
+    LOG_INFO("Auto-playing next song: {}", nextSongNum);
+
+    // Load and play the next song
+    if (client_->LoadAudio(nextSongNum)) {
+      currentSongNum_ = nextSongNum;
+
+      // Get song duration from audio data size and format
+      const WavHeader& header = client_->GetPlayer().get_header();
+      songDuration_ =
+          client_->GetAudioData().size() /
+          (header.numChannels * (header.bitsPerSample / 8) * header.sampleRate);
+
+      // Update duration label (format: MM:SS)
+      int minutes = songDuration_ / 60;
+      int seconds = songDuration_ % 60;
+      durationLabel_->setText(
+          QString("%1:%2").arg(minutes).arg(seconds, 2, 10, QChar('0')));
+
+      // Update slider range
+      positionSlider_->setRange(0, songDuration_);
+      positionSlider_->setValue(0);
+      positionSlider_->setEnabled(true);
+
+      // Update now playing label with formatted text
+      nowPlayingLabel_->setText(QString("Now Playing: %1").arg(nextSongName));
+      nowPlayingLabel_->setStyleSheet(
+          "font-size: 16px; font-weight: bold; margin-top: 10px; color: "
+          "#BB86FC;");
+
+      // Play the song
+      client_->Play();
+
+      // Update state and buttons
+      playbackState_ = Playing;
+      updatePlayPauseButton();
+      stopButton_->setEnabled(true);
+    }
+  }
+}
+
 void MainWindow::onStopClicked() {
   client_->Stop();
 
@@ -632,6 +846,9 @@ void MainWindow::onStopClicked() {
   playbackState_ = Stopped;
   updatePlayPauseButton();
   stopButton_->setEnabled(false);
+
+  // Disable auto-play next
+  autoPlayNext_ = false;
 }
 
 void MainWindow::onRefreshPeersClicked() { refreshPeerList(); }
@@ -689,22 +906,22 @@ void MainWindow::onGossipClicked() {
 
 void MainWindow::onSliderReleased() {
   if (playbackState_ == Playing) {
-      // If playing, briefly pause
-      client_->Pause();
-      playbackState_ = Paused;
-      updatePlayPauseButton();
+    // If playing, briefly pause
+    client_->Pause();
+    playbackState_ = Paused;
+    updatePlayPauseButton();
   }
   if (playbackState_ == Paused) {
-      // Get the target second from the slider
-      int targetSecond = positionSlider_->value();  // already in seconds
+    // Get the target second from the slider
+    int targetSecond = positionSlider_->value();  // already in seconds
 
-      // Update the position
-      client_->SeekTo(targetSecond);
-      
-      // If paused, resume
-      client_->Resume();
-      playbackState_ = Playing;
-      updatePlayPauseButton();
+    // Update the position
+    client_->SeekTo(targetSecond);
+
+    // If paused, resume
+    client_->Resume();
+    playbackState_ = Playing;
+    updatePlayPauseButton();
   }
   // Reset seeking to false
   userIsSeeking_ = false;
@@ -714,7 +931,7 @@ void MainWindow::onPositionTimerTimeout() {
   if (userIsSeeking_) {
     // If user is seeking, do not update the position
     return;
-  }  
+  }
 
   if (client_->GetPlayer().isPlaying()) {
     // Get position in bytes
@@ -744,7 +961,8 @@ void MainWindow::onPositionTimerTimeout() {
   if (client_->IsCommandFromBroadcast()) {
     // If broadcast command to play
     if (client_->GetBroadcastAction() == "play") {
-      // Reset the controls from Pause and Stop (not greyed out but purple) to Play and Stop (greyed out)
+      // Reset the controls from Pause and Stop (not greyed out but purple) to
+      // Play and Stop (greyed out)
       nowPlayingLabel_->setText(QString("Now Playing"));
       nowPlayingLabel_->setStyleSheet(
           "font-size: 16px; font-weight: bold; margin-top: 10px; color: "
@@ -757,7 +975,8 @@ void MainWindow::onPositionTimerTimeout() {
     }
     // If broadcast command to pause
     else if (client_->GetBroadcastAction() == "pause") {
-      // Reset the control from Pause and Stop to Resume and Stop (both not greyed out but in purple)
+      // Reset the control from Pause and Stop to Resume and Stop (both not
+      // greyed out but in purple)
       nowPlayingLabel_->setText(QString("Now Paused"));
       nowPlayingLabel_->setStyleSheet(
           "font-size: 16px; font-weight: bold; margin-top: 10px; color: "
@@ -765,9 +984,9 @@ void MainWindow::onPositionTimerTimeout() {
       playbackState_ = Paused;
       updatePlayPauseButton();
       stopButton_->setEnabled(true);
-    }
-    else if (client_->GetBroadcastAction() == "resume") {
-      // Reset the control from Pause and Stop to Resume and Stop (both not greyed out but in purple)
+    } else if (client_->GetBroadcastAction() == "resume") {
+      // Reset the control from Pause and Stop to Resume and Stop (both not
+      // greyed out but in purple)
       nowPlayingLabel_->setText(QString("Now Playing"));
       nowPlayingLabel_->setStyleSheet(
           "font-size: 16px; font-weight: bold; margin-top: 10px; color: "
@@ -792,15 +1011,14 @@ void MainWindow::onPositionTimerTimeout() {
       updatePlayPauseButton();
       stopButton_->setEnabled(false);
 
-    }
-    else {
+    } else {
       // Unknown command
       LOG_ERROR("Unknown command from broadcast: {}",
                 client_->GetBroadcastAction());
     }
     client_->SetCommandFromBroadcast(false);
     client_->SetCommandFromBroadcastAction(" ");
-}
+  }
 
   // Periodically update offset label if on peers tab
   if (tabWidget_->currentIndex() == 1) {
@@ -809,5 +1027,13 @@ void MainWindow::onPositionTimerTimeout() {
       offsetLabel_->setText(
           QString("Average Offset: %1 ns").arg(average_offset));
     }
+  }
+
+  // Check if song has ended and we need to play the next one
+  if (playbackState_ == Playing && !client_->GetPlayer().isPlaying() &&
+      (repeatEnabled_ || shuffleEnabled_)) {
+    // Song has finished playing and auto-play is enabled
+    autoPlayNext_ = true;
+    playNextSong();
   }
 }

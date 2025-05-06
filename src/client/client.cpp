@@ -54,7 +54,6 @@ bool AudioClient::LoadAudio(int song_num) {
 }
 
 void AudioClient::Play() {
-
   std::lock_guard<std::mutex> lk(player_mutex_);
 
   // Broadcast load then play to peers if sync-enabled
@@ -73,7 +72,6 @@ void AudioClient::Play() {
 }
 
 void AudioClient::Pause() {
-
   std::lock_guard<std::mutex> lk(player_mutex_);
 
   // Broadcast command to peers if enabled and not from broadcast
@@ -86,7 +84,6 @@ void AudioClient::Pause() {
 }
 
 void AudioClient::Resume() {
-
   std::lock_guard<std::mutex> lk(player_mutex_);
 
   // Broadcast command to peers if enabled and not from broadcast
@@ -99,7 +96,6 @@ void AudioClient::Resume() {
 }
 
 void AudioClient::Stop() {
-
   std::lock_guard<std::mutex> lk(player_mutex_);
 
   // Broadcast command to peers if enabled and not from broadcast
@@ -113,7 +109,8 @@ void AudioClient::Stop() {
 
 void AudioClient::SeekTo(int seconds) {
   const WavHeader& header = GetPlayer().get_header();
-  unsigned int bytesPerSecond = header.sampleRate * header.numChannels * (header.bitsPerSample / 8);
+  unsigned int bytesPerSecond =
+      header.sampleRate * header.numChannels * (header.bitsPerSample / 8);
   unsigned int targetByte = seconds * bytesPerSecond;
   GetPlayer().get_position_ref().store(targetByte);
 }

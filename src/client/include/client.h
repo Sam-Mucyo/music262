@@ -1,8 +1,8 @@
 #pragma once
 
 #include <atomic>
-#include <mutex>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -75,11 +75,11 @@ class AudioClient {
   void SetCommandFromBroadcastAction(const std::string& action) {
     command_from_broadcast_action_ = action;  // pass by const ref
   }
-  
+
  private:
   std::unique_ptr<music262::AudioServiceInterface> audio_service_;
   AudioPlayer player_;
-  std::mutex  player_mutex_;
+  std::mutex player_mutex_;
   std::vector<char> audio_data_;
   int current_song_num_{-1};  // index of last loaded song
 
