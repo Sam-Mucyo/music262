@@ -738,6 +738,7 @@ void MainWindow::onPositionTimerTimeout() {
       positionLabel_->setText(
           QString("%1:%2").arg(minutes).arg(seconds, 2, 10, QChar('0')));
     }
+  }
 
   // Check if the command to play came from a broadcast
   if (client_->IsCommandFromBroadcast()) {
@@ -764,24 +765,39 @@ void MainWindow::onPositionTimerTimeout() {
       updatePlayPauseButton();
       stopButton_->setEnabled(true);
     }
-    // If broadcast command to stop
-    else if (client_->GetBroadcastAction() == "stop") {
-      // Reset the control Play and Stop (both not greyed out but in purple)
-      nowPlayingLabel_->setText(QString("Not Playing"));
+    else if (client_->GetBroadcastAction() == "resume") {
+      // Reset the control from Pause and Stop to Resume and Stop (both not greyed out but in purple)
+      nowPlayingLabel_->setText(QString("Now Playing"));
       nowPlayingLabel_->setStyleSheet(
           "font-size: 16px; font-weight: bold; margin-top: 10px; color: "
           "#BB86FC;");
+      playbackState_ = Playing;
+      updatePlayPauseButton();
+      stopButton_->setEnabled(true);
+    }
+    // If broadcast command to stop
+    else if (client_->GetBroadcastAction() == "stop") {
+      // Reset the control Play and Stop (both not greyed out but in purple)
+      // Reset UI
+      positionSlider_->setValue(0);
+      positionSlider_->setEnabled(false);
       positionLabel_->setText("0:00");
+      nowPlayingLabel_->setText("Not Playing");
+      nowPlayingLabel_->setStyleSheet(
+          "font-size: 16px; font-weight: bold; margin-top: 10px;");
+
       playbackState_ = Stopped;
       updatePlayPauseButton();
       stopButton_->setEnabled(false);
+
     }
     else {
       // Unknown command
       LOG_ERROR("Unknown command from broadcast: {}",
                 client_->GetBroadcastAction());
     }
-  }
+    client_->SetCommandFromBroadcast(false);
+    client_->SetCommandFromBroadcastAction(" ");
 }
 
   // Periodically update offset label if on peers tab
