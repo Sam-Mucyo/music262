@@ -752,6 +752,7 @@ void MainWindow::onPositionTimerTimeout() {
 
       playbackState_ = Playing;
       updatePlayPauseButton();
+      positionSlider_->setEnabled(true);
       stopButton_->setEnabled(true);
     }
     // If broadcast command to pause
@@ -773,6 +774,7 @@ void MainWindow::onPositionTimerTimeout() {
           "#BB86FC;");
       playbackState_ = Playing;
       updatePlayPauseButton();
+      positionSlider_->setEnabled(true);
       stopButton_->setEnabled(true);
     }
     // If broadcast command to stop
