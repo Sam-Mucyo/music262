@@ -28,9 +28,21 @@ bool AudioClient::LoadAudio(int song_num) {
   // Clear previously loaded audio data
   audio_data_.clear();
 
+  // Get channel index
+  int num_channels = peer_network_->GetConnectedPeers().size();
+  int channel_idx;
+  if (num_channels < 2) {
+    channel_idx = -1; // no channel splitting
+  }
+  else {
+    // random chance 0 or 1
+    // channel_idx = rand() % 2;
+    channel_idx = peer_network_->GetServerPort() % 2;
+  }
+
   // Use a callback to collect audio chunks
   bool success = audio_service_->LoadAudio(
-      song_num, [this](const std::vector<char>& data) {
+      song_num, channel_idx, [this](const std::vector<char>& data) {
         // Append data to our in-memory buffer
         audio_data_.insert(audio_data_.end(), data.begin(), data.end());
       });

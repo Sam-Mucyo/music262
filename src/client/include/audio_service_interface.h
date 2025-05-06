@@ -23,7 +23,7 @@ class AudioServiceInterface {
 
   // Load audio data for a specific song
   // The callback will be called for each chunk of audio data received
-  virtual bool LoadAudio(int song_num, AudioChunkCallback callback) = 0;
+  virtual bool LoadAudio(int song_num, int channel_idx, AudioChunkCallback callback) = 0;
 
   // Get the list of connected client IPs
   virtual std::vector<std::string> GetPeerClientIPs() = 0;

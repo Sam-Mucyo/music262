@@ -44,12 +44,13 @@ class GrpcAudioService : public AudioServiceInterface {
     return playlist;
   }
 
-  bool LoadAudio(int song_num, AudioChunkCallback callback) override {
+  bool LoadAudio(int song_num, int channel_idx, AudioChunkCallback callback) override {
     LOG_INFO("Loading audio for song: {}", song_num);
 
     // Create a request to load audio
     audio_service::LoadAudioRequest request;
     request.set_song_num(song_num);
+    request.set_channel_index(channel_idx);
 
     ClientContext context;
     std::unique_ptr<ClientReader<audio_service::AudioChunk>> reader(

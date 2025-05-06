@@ -17,6 +17,7 @@
 #include "../common/include/logger.h"
 #include "audio_service.grpc.pb.h"
 #include "include/audio_server.h"
+#include "../client/include/wavheader.h"
 
 // Helper: get first non-loopback IPv4 address
 std::string GetLocalIPAddress() {
@@ -35,6 +36,64 @@ std::string GetLocalIPAddress() {
   }
   freeifaddrs(ifas);
   return "";
+}
+
+
+// Helper: extract stereo channel from WAV file data
+std::vector<char> ExtractStereoChannel(const std::vector<char>& full,
+  int channel_index /* -1 = full, 0 = L, 1 = R */) {
+if (channel_index == -1) {
+return full;  // full audio requested
+}
+
+const WavHeader* hdr = reinterpret_cast<const WavHeader*>(full.data());
+if (hdr->bitsPerSample % 8 != 0) {
+LOG_ERROR("Unsupported bitsPerSample: {}", hdr->bitsPerSample);
+return full;
+}
+
+const uint16_t bytesPerSample = hdr->bitsPerSample / 8;
+const size_t totalFrames = (full.size() - sizeof(WavHeader)) / (bytesPerSample * hdr->numChannels);
+
+std::vector<char> mono_data;
+mono_data.resize(sizeof(WavHeader) + totalFrames * bytesPerSample);
+
+// Copy and rewrite header for mono
+WavHeader out_hdr = *hdr;
+out_hdr.numChannels = 1;
+out_hdr.byteRate = out_hdr.sampleRate * bytesPerSample;
+out_hdr.blockAlign = bytesPerSample;
+out_hdr.dataSize = static_cast<uint32_t>(totalFrames * bytesPerSample);
+std::memcpy(mono_data.data(), &out_hdr, sizeof(WavHeader));
+
+const char* src = full.data() + sizeof(WavHeader);
+char* dst = mono_data.data() + sizeof(WavHeader);
+
+if (hdr->numChannels == 2) {
+// True stereo: extract channel 0 (left) or 1 (right)
+src += channel_index * bytesPerSample;
+for (size_t i = 0; i < totalFrames; ++i) {
+std::memcpy(dst, src, bytesPerSample);
+dst += bytesPerSample;
+src += bytesPerSample * 2;  // move to same channel in next frame
+}
+} else if (hdr->numChannels == 1) {
+// Mono fallback: alternate samples into "channels"
+for (size_t i = 0; i < totalFrames; ++i) {
+if ((i % 2) == channel_index) {
+const char* sample = src + i * bytesPerSample;
+std::memcpy(dst, sample, bytesPerSample);
+dst += bytesPerSample;
+}
+}
+// Resize to match number of copied samples
+mono_data.resize(sizeof(WavHeader) + (dst - (mono_data.data() + sizeof(WavHeader))));
+} else {
+LOG_WARN("Unsupported numChannels: {}", hdr->numChannels);
+return full;
+}
+
+return mono_data;
 }
 
 // AudioServiceImpl class that implements the gRPC service
@@ -67,7 +126,8 @@ class AudioServiceImpl final : public audio_service::audio_service::Service {
       const audio_service::LoadAudioRequest* request,
       grpc::ServerWriter<audio_service::AudioChunk>* writer) override {
     int song_num = request->song_num();
-    LOG_INFO("Received request to load song: {}", song_num);
+    int channel_index = request->channel_index();
+    LOG_INFO("Received request to load song: {} from channel: {}", song_num, channel_index);
 
     // Get the file path from the server
     std::string file_path = server_->GetAudioFilePath(song_num);
@@ -87,7 +147,34 @@ class AudioServiceImpl final : public audio_service::audio_service::Service {
     std::string client_ip = context->peer();
     server_->RegisterClient(client_ip);
 
-    // Read and send the file in chunks
+    // If split channel
+    if (channel_index == 0 || channel_index == 1) {
+      // Load full WAV file into memory
+      std::vector<char> full_data((std::istreambuf_iterator<char>(file)),
+                                  std::istreambuf_iterator<char>());
+    
+      std::vector<char> mono_data = ExtractStereoChannel(full_data, channel_index);
+    
+      // Send mono data in chunks
+      constexpr size_t CHUNK_SIZE = 64 * 1024;  // 64 KB chunks
+      size_t total_bytes_sent = 0;
+      for (size_t offset = 0; offset < mono_data.size(); offset += CHUNK_SIZE) {
+        size_t chunk_size = std::min(CHUNK_SIZE, mono_data.size() - offset);
+        audio_service::AudioChunk chunk;
+        chunk.set_data(mono_data.data() + offset, chunk_size);
+        if (!writer->Write(chunk)) {
+          LOG_ERROR("Failed to write mono audio chunk to client");
+          break;
+        }
+        total_bytes_sent += chunk_size;
+      }
+    
+      LOG_INFO("Sent {} bytes of mono audio data (channel {})",
+               total_bytes_sent, channel_index);
+      return grpc::Status::OK;
+    }    
+
+    // If sending as one channel: read and send the file in chunks
     constexpr size_t CHUNK_SIZE = 64 * 1024;  // 64 KB chunks
     std::vector<char> buffer(CHUNK_SIZE);
     size_t total_bytes_sent = 0;
